@@ -24,6 +24,20 @@
  # - 镜像构建阶段会在“基础 venv”（/opt/n8n-python-venv）安装 python-fire。
  # - 独立 venv 创建时使用 --system-site-packages 继承基础 venv 的 site-packages，避免缺 fire。
  set -eu
+ 
+ # 兼容 docker exec 场景：
+ # - docker-entrypoint-extra.sh 会在容器启动时加载 N8N_SUPER_CONFIG_FILE 并影响 n8n 主进程环境
+ # - 但 docker exec 启动的新进程不会继承 entrypoint 动态导出的变量
+ # - 因此 wrapper 在每次执行时也尝试加载同一份配置文件，保证行为一致
+ CONFIG_FILE="${N8N_SUPER_CONFIG_FILE:-}"
+ if [ -n "${CONFIG_FILE}" ] && [ -f "${CONFIG_FILE}" ]; then
+   tmp_cfg="$(mktemp)"
+   sed '1s/^\xEF\xBB\xBF//; s/\r$//' "${CONFIG_FILE}" > "${tmp_cfg}"
+   set -a
+   . "${tmp_cfg}"
+   set +a
+   rm -f "${tmp_cfg}"
+ fi
 
  # 基础 venv：镜像构建时创建，提供 python3-real（未包装的真实解释器）与基础依赖。
  BASE_VENV="${N8N_PYTHON_VENV:-/opt/n8n-python-venv}"

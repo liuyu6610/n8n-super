@@ -135,6 +135,18 @@ RUN set -eux; \
 # 扩展示例（只示意）：
 # - 追加更多节点：npm install ... n8n-nodes-xxx n8n-nodes-yyy
 # - 如果你要固定版本：npm install n8n-nodes-xxx@<version>
+#
+# 企业推荐：通过 build-arg 批量安装社区节点
+# - 默认只安装 n8n-nodes-python（与当前镜像默认行为一致）
+# - 构建时覆盖示例：
+#   docker build \
+#     --build-arg COMMUNITY_NODES="n8n-nodes-python@<ver> n8n-nodes-xxx@1.2.3" \
+#     -t n8n-super:1.78.1 .
+#
+# 注意：
+# - 这里用空格分隔多个 npm 包名（npm install 支持）
+# - 强烈建议固定版本，避免拉取 latest 导致不可复现
+ARG COMMUNITY_NODES="n8n-nodes-python"
 RUN set -eux; \
   npm config set fund false; \
   npm config set audit false; \
@@ -142,7 +154,7 @@ RUN set -eux; \
   mkdir -p /home/node/.n8n/nodes; \
   cd /home/node/.n8n/nodes; \
   if [ ! -f package.json ]; then npm init -y; fi; \
-  npm install --no-fund --no-audit --omit=dev n8n-nodes-python; \
+  npm install --no-fund --no-audit --omit=dev ${COMMUNITY_NODES}; \
   mkdir -p /home/node/.n8n/custom; \
   chown -R node:node /home/node/.n8n
 

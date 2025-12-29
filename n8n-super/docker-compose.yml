@@ -15,6 +15,16 @@ services:
     # - 如果你只想使用已构建镜像，可删除 build 段并保留 image
     build:
       context: .
+      # build args：用于向 Dockerfile 注入 ARG（构建期参数）
+      #
+      # COMMUNITY_NODES：批量安装 n8n 社区节点（空格分隔多个 npm 包）。
+      # - 默认值与 Dockerfile 一致：仅安装 n8n-nodes-python
+      # - 你可以直接在此文件里改（团队统一）
+      # - 或者用环境变量覆盖（更灵活）：
+      #   Windows(PowerShell): $env:COMMUNITY_NODES="n8n-nodes-python@1.2.3 n8n-nodes-xxx@4.5.6"; docker compose build
+      #   Linux/macOS: COMMUNITY_NODES="..." docker compose build
+      args:
+        COMMUNITY_NODES: ${COMMUNITY_NODES:-n8n-nodes-python}
 
     # image: 镜像名与版本（建议固定，避免多人环境漂移）
     image: n8n-super:1.78.1

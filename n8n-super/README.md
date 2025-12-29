@@ -97,6 +97,108 @@ cd d:\job-test\n8n-best\n8n-super
 - venv 内 `python-fire` 可导入
 - `n8n-nodes-python` 包存在
 
+## 新版本升级 / 重新构建镜像 / 回归测试（推荐按此 SOP）
+
+本章节用于：
+
+- 你修改了 `Dockerfile` / `n8n-python3-wrapper.sh` / `docker-entrypoint-extra.sh` 等构建/启动关键文件
+- 你希望构建一个“新版本镜像 tag”，并确保容器运行符合预期
+
+### 0) 重要概念（避免踩坑）
+
+- **`ARG COMMUNITY_NODES` 是构建期参数（build arg）**：只能在 `docker build` 或 `docker compose build` 时注入；容器运行后无法再改变。
+- **重新 build 不等于容器自动更新**：build 完后建议使用 `docker compose up -d --force-recreate` 重新创建容器。
+- **Windows PowerShell 的 curl 坑**：PowerShell 中 `curl` 通常是 `Invoke-WebRequest` 的别名，推荐用 `curl.exe` 或 `Invoke-RestMethod`。
+
+### 1) 单容器模式（docker-compose.yml）升级流程
+
+#### 1.1 停止旧容器
+
+```powershell
+docker compose -f docker-compose.yml down
+```
+
+#### 1.2 （可选）注入社区节点批量安装（COMMUNITY_NODES）
+
+如果你需要在构建时批量安装社区节点：
+
+```powershell
+$env:COMMUNITY_NODES="n8n-nodes-python@0.1.4 n8n-nodes-xxx@1.2.3"
+```
+
+不设置则使用默认：`n8n-nodes-python`。
+
+#### 1.3 构建镜像（推荐 no-cache 确保生效）
+
+```powershell
+docker compose -f docker-compose.yml build --no-cache
+```
+
+#### 1.4 启动并强制重建容器（确保使用新镜像层）
+
+```powershell
+docker compose -f docker-compose.yml up -d --force-recreate
+```
+
+#### 1.5 回归自测（必做）
+
+健康检查（Windows 推荐 `curl.exe`）：
+
+```powershell
+curl.exe -fsS http://localhost:5678/healthz
+```
+
+核心能力自测：
+
+```powershell
+docker exec n8n-super n8n --version
+docker exec n8n-super argocd version --client
+docker exec n8n-super /opt/n8n-python-venv/bin/python -c "import fire; print('python-fire ok')"
+docker exec n8n-super node -e "const p=require('/home/node/.n8n/nodes/node_modules/n8n-nodes-python/package.json'); console.log(p.name+'@'+p.version)"
+```
+
+Python 自动装包自测（依赖来自 `config/requirements.txt`，首次会自动安装并缓存）：
+
+```powershell
+docker exec n8n-super python3 -c "import requests; print('requests:', requests.__version__)"
+```
+
+### 2) Queue 模式（docker-compose.queue.yml）升级流程
+
+#### 2.1 停止旧集群
+
+```powershell
+docker compose -f docker-compose.queue.yml down
+```
+
+#### 2.2 注入 COMMUNITY_NODES（可选）
+
+```powershell
+$env:COMMUNITY_NODES="n8n-nodes-python@0.1.4 n8n-nodes-xxx@1.2.3"
+```
+
+#### 2.3 构建 + 启动（强制重建）
+
+```powershell
+docker compose -f docker-compose.queue.yml build --no-cache
+docker compose -f docker-compose.queue.yml up -d --force-recreate
+```
+
+#### 2.4 回归自测（Queue）
+
+```powershell
+curl.exe -fsS http://localhost:5678/healthz
+docker exec n8n-web n8n --version
+docker exec n8n-worker n8n --version
+docker exec n8n-webhook n8n --version
+```
+
+如需更完整自测，可运行：
+
+```bash
+./scripts/test-queue.sh
+```
+
 ## Python 包动态安装（启动时）
 
 通过环境变量控制（在 `docker-compose.yml` 中设置后重启即可）：
@@ -277,13 +379,51 @@ docker compose -f docker-compose.queue.yml up -d --scale n8n-worker=3
 - `N8N_PIP_INDEX_URL`
 - `N8N_PIP_TRUSTED_HOST`
 
-本项目默认使用清华 TUNA：
-
-- `https://pypi.tuna.tsinghua.edu.cn/simple`
-
 ### 3) 新增 n8n 社区节点（n8n-nodes-*）
 
 社区节点是 npm 包，建议以“镜像构建时安装”的方式做可追踪版本管理。
+
+#### 通过 Dockerfile 的 `ARG COMMUNITY_NODES` 批量安装（推荐）
+
+`COMMUNITY_NODES` 是 **构建期参数（build arg）**，只能在构建镜像时注入：
+
+- **方式A：docker build**
+
+```bash
+docker build \
+  --build-arg COMMUNITY_NODES="n8n-nodes-python@<ver> n8n-nodes-xxx@1.2.3" \
+  -t n8n-super:1.78.1 .
+```
+
+- **方式B：docker compose build（推荐团队协作）**
+
+本项目已在 `docker-compose.yml` / `docker-compose.queue.yml` 的 `build.args` 中预留：
+
+```yaml
+build:
+  context: .
+  args:
+    COMMUNITY_NODES: ${COMMUNITY_NODES:-n8n-nodes-python}
+```
+
+你可以：
+
+- **直接在 compose 文件里写死**（团队统一）
+- **用环境变量覆盖**（更灵活）
+  - Linux/macOS:
+
+    ```bash
+    COMMUNITY_NODES="n8n-nodes-python@<ver> n8n-nodes-xxx@1.2.3" docker compose build
+    ```
+
+  - Windows PowerShell:
+
+    ```powershell
+    $env:COMMUNITY_NODES="n8n-nodes-python@<ver> n8n-nodes-xxx@1.2.3"
+    docker compose build
+    ```
+
+注意：强烈建议固定版本（不要用 `latest`），保证可复现。
 
 - **推荐做法**：修改 `Dockerfile` 中安装社区节点的 `npm install` 行，追加你要的包名，然后重新 `docker build`。
 - **不推荐做法**：运行中的容器里手工 `npm install`（难审计、难复现、重建易丢失）。
