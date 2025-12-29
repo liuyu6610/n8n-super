@@ -1,2 +1,0 @@
-# n8n-super Python 依赖示例（容器启动后 python3 wrapper 会按需自动安装）
-requests==2.32.3

@@ -13,13 +13,18 @@
 ## 目录结构
 
 - `Dockerfile`：镜像构建文件
-- `docker-compose.yml`：运行编排（端口、数据卷、健康检查、配置注入）
+- `docker-compose.yml`：单容器模式编排（端口、数据卷、健康检查、配置注入）
+- `docker-compose.queue.yml`：Queue 模式编排（web/worker/webhook + redis + postgres）
 - `docker-entrypoint-extra.sh`：启动入口（加载配置文件/环境变量后转交官方 `/docker-entrypoint.sh`）
-- `n8n-super.env`：启动配置注入文件（pip 源、自动装包开关、依赖文件路径等）
-- `requirements.txt`：Python 依赖示例（可替换为你的依赖集合）
-- `n8n-python3-wrapper.sh`：venv 内 `python3` wrapper（实现运行前按需 `pip install`）
-- `build.ps1` / `run.ps1` / `test.ps1`：Windows (PowerShell) 构建、运行、验证脚本
-- `build.sh` / `run.sh` / `test.sh`：Linux/macOS Shell 脚本用法
+- `n8n-python3-wrapper.sh`：venv 内 `python3` wrapper（运行时按依赖 hash 创建/复用独立 venv）
+- `config/`
+  - `config/n8n-super.env`：启动配置注入文件（pip 源、自动装包开关、缓存目录等）
+  - `config/n8n-super.env.example`：示例
+  - `config/requirements.txt`：Python 依赖示例（可替换为你的依赖集合）
+- `scripts/`
+  - `scripts/*.sh`：Linux/macOS 真实实现脚本
+- `windows/`
+  - `windows/*.ps1`：Windows/PowerShell 脚本
 
 ## 快速开始（Linux 推荐）
 
@@ -31,14 +36,14 @@
 ### 1) 构建镜像
 
 ```bash
-chmod +x ./build.sh ./run.sh ./test.sh
-./build.sh
+chmod +x ./scripts/build.sh ./scripts/run.sh ./scripts/test.sh
+./scripts/build.sh
 ```
 
 ### 2) 启动
 
 ```bash
-./run.sh
+./scripts/run.sh
 ```
 
 ### 3) 健康检查
@@ -50,7 +55,7 @@ curl -fsS http://localhost:5678/healthz
 ### 4) 验证“Python 自动装包”是否生效
 
 ```bash
-./test.sh
+./scripts/test.sh
 docker exec n8n-super python3 -c "import requests; print('requests:', requests.__version__)"
 ```
 
@@ -64,13 +69,13 @@ docker exec n8n-super python3 -c "import requests; print('requests:', requests._
 
 ```powershell
 cd d:\job-test\n8n-best\n8n-super
-.\build.ps1
+.\windows\build.ps1
 ```
 
 ### 2) 运行（Windows）
 
 ```powershell
-.\run.ps1
+.\windows\run.ps1
 ```
 
 访问：
@@ -81,7 +86,7 @@ cd d:\job-test\n8n-best\n8n-super
 ### 3) 验证（Windows）
 
 ```powershell
-.\test.ps1
+.\windows\test.ps1
 ```
 
 验证内容包括：
@@ -97,7 +102,7 @@ cd d:\job-test\n8n-best\n8n-super
 通过环境变量控制（在 `docker-compose.yml` 中设置后重启即可）：
 
 - `N8N_PYTHON_PACKAGES`：要安装的 pip 包列表（空格分隔）
-- `N8N_PYTHON_REQUIREMENTS_FILE`：requirements.txt 路径
+- `N8N_PYTHON_REQUIREMENTS_FILE`：requirements 文件路径（推荐挂载 `config/requirements.txt` 到容器内）
 - `N8N_PYTHON_PIP_EXTRA_ARGS`：额外 pip 参数（例如私有源 `--index-url ...`）
 
 示例：
@@ -131,7 +136,11 @@ docker compose up -d
 - 当 `N8N_PYTHON_AUTO_INSTALL=true` 时
 - 若设置了 `N8N_PYTHON_PACKAGES` 或 `N8N_PYTHON_REQUIREMENTS_FILE`
 
-则每次执行 Python 前会自动 `pip install`，并用 **lock + stamp** 避免每次重复安装。
+则每次执行 Python 前会自动 `pip install`，并采用“**按依赖集合 hash 创建/复用独立 venv**”的方式实现隔离与缓存：
+
+- 不同 workflow（不同 requirements/包列表/源参数）会落到不同 venv，避免互相污染
+- 相同依赖集合复用同一个 venv，避免重复安装
+- venv 缓存目录默认在 `/home/node/.n8n/pyenvs`（可配置）
 
 示例（公司源 + 自动安装 requests）：
 
@@ -147,7 +156,7 @@ environment:
 
 由于容器级环境变量（如 pip 源、自动装包开关）通常不适合在 n8n UI 里直接修改，本项目支持在启动时加载一个配置文件，将所有“可自定义项”集中管理。
 
-1) 复制示例文件：`n8n-super.env.example` -> `n8n-super.env`
+1) 复制示例文件：`config/n8n-super.env.example` -> `config/n8n-super.env`
 
 2) 在 `docker-compose.yml` 中挂载并指定：
 
@@ -155,10 +164,22 @@ environment:
 environment:
   N8N_SUPER_CONFIG_FILE: "/etc/n8n-super.env"
 volumes:
-  - ./n8n-super.env:/etc/n8n-super.env:ro
+  - ./config/n8n-super.env:/etc/n8n-super.env:ro
 ```
 
-这样你只需要维护 `n8n-super.env`，不用频繁改 compose 或重打镜像。
+这样你只需要维护 `config/n8n-super.env`，不用频繁改 compose 或重打镜像。
+
+### 多人/多工作流：独立 venv 缓存与清理（可选）
+
+- `N8N_PYTHON_VENV_CACHE_DIR`
+  - 独立 venv 缓存目录
+  - 默认：`/home/node/.n8n/pyenvs`
+- `N8N_PYTHON_VENV_CACHE_CLEANUP`
+  - 是否在容器启动时清理旧缓存目录
+  - 可选值：`true/false`
+- `N8N_PYTHON_VENV_CACHE_TTL_DAYS`
+  - 清理策略：删除缓存目录下 **mtime 超过 N 天** 的子目录
+  - 仅当 `N8N_PYTHON_VENV_CACHE_CLEANUP=true` 时生效
 
 ## Shell / Execute Command 节点安全说明（重要）
 
@@ -175,6 +196,59 @@ n8n 默认会通过 `NODES_EXCLUDE` 禁用一些高危节点（例如 **Command*
 
 ## 关于数据卷与社区节点
 
+## Queue 模式（生产推荐：Web + Worker + Webhook + Redis + Postgres）
+
+当工作流规模达到几百、并发执行较高、或者需要更好的横向扩展能力时，建议使用 Queue 模式。
+
+本项目提供了一个可直接运行的参考编排：`docker-compose.queue.yml`，并配套脚本：
+
+- `run-queue.sh` / `run-queue.ps1`
+- `test-queue.sh` / `test-queue.ps1`
+
+### 1) 启动（Linux/macOS）
+
+```bash
+chmod +x ./scripts/run-queue.sh ./scripts/test-queue.sh
+./scripts/run-queue.sh
+./scripts/test-queue.sh
+```
+
+### 2) 启动（Windows）
+
+```powershell
+.\windows\run-queue.ps1
+.\windows\test-queue.ps1
+```
+
+### 3) 扩容 worker（示例）
+
+```bash
+docker compose -f docker-compose.queue.yml up -d --scale n8n-worker=3
+```
+
+## 后续上 K8s 的最优拆分建议（适配多服务/多副本）
+
+建议按如下方式拆分，几乎可 1:1 迁移自 queue compose：
+
+- **Postgres**
+  - 生产建议使用云 RDS/自建高可用（StatefulSet 也可，但运维复杂）
+- **Redis**
+  - 生产建议使用 Redis 主从/哨兵或云 Redis
+- **n8n-web（Deployment）**
+  - 对外提供 UI/API
+- **n8n-webhook（Deployment，可选）**
+  - 专门承接 webhook 流量，便于独立扩容
+- **n8n-worker（Deployment，可水平扩容）**
+  - 执行任务的核心组件，建议基于队列长度/CPU/Mem 做 HPA
+- **共享存储 /home/node/.n8n**
+  - 至少需要持久化（PVC），否则 workflows/credentials 不可持久
+  - 如果你做多副本，PVC 的访问模式需要评估（RWX/RWO）
+
+关于“Python 独立 venv 缓存目录”：
+
+- 默认在 `/home/node/.n8n/pyenvs`
+- 生产建议用 PVC 持久化，避免每次重建 pod 重装依赖
+
 `docker-compose.yml` 默认使用 **named volume** 挂载到 `/home/node/.n8n`。Docker 在首次创建该 volume 时会把镜像内已有的 `/home/node/.n8n` 内容初始化到 volume 中，因此：
 
 - 预装的 `n8n-nodes-python` 会被保留
@@ -188,17 +262,17 @@ n8n 默认会通过 `NODES_EXCLUDE` 禁用一些高危节点（例如 **Command*
 
 你有两种方式：
 
-- **方式A（推荐，声明式）**：编辑 `requirements.txt`，然后重启容器。
-- **方式B（临时）**：在 `n8n-super.env` 设置 `N8N_PYTHON_PACKAGES`（空格分隔），然后重启容器。
+- **方式A（推荐，声明式）**：编辑 `config/requirements.txt`，然后重启容器。
+- **方式B（临时）**：在 `config/n8n-super.env` 设置 `N8N_PYTHON_PACKAGES`（空格分隔），然后重启容器。
 
-关键配置都写在 `n8n-super.env`：
+关键配置都写在 `config/n8n-super.env`：
 
 - `N8N_PYTHON_AUTO_INSTALL="true"`
 - `N8N_PYTHON_REQUIREMENTS_FILE="/home/node/.n8n/requirements.txt"`
 
 ### 2) 设置/更换 pip 源（公开/企业都适用）
 
-在 `n8n-super.env` 中设置：
+在 `config/n8n-super.env` 中设置：
 
 - `N8N_PIP_INDEX_URL`
 - `N8N_PIP_TRUSTED_HOST`
@@ -245,14 +319,14 @@ docker logs --tail 200 n8n-super
 
 常见原因：
 
-- `n8n-super.env` 行尾是 CRLF/BOM 或者格式不规范（本项目已做清理兼容，但仍建议用 UTF-8 + LF）
+- `config/n8n-super.env` 行尾是 CRLF/BOM 或者格式不规范（本项目已做清理兼容，但仍建议用 UTF-8 + LF）
 
 ### B) Python 自动安装不生效
 
 检查：
 
-- `n8n-super.env` 中 `N8N_PYTHON_AUTO_INSTALL="true"`
-- `requirements.txt` 已挂载到容器：`/home/node/.n8n/requirements.txt`
+- `config/n8n-super.env` 中 `N8N_PYTHON_AUTO_INSTALL="true"`
+- `config/requirements.txt` 已挂载到容器：`/home/node/.n8n/requirements.txt`
 
 验证：
 

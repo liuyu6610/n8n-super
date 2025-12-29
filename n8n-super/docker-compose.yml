@@ -20,10 +20,13 @@ services:
       N8N_PYTHON_AUTO_INSTALL: "false"
       N8N_PYTHON_PACKAGES: ""
       N8N_PYTHON_REQUIREMENTS_FILE: ""
+      N8N_PYTHON_VENV_CACHE_DIR: "/home/node/.n8n/pyenvs"
+      N8N_PYTHON_VENV_CACHE_CLEANUP: "false"
+      N8N_PYTHON_VENV_CACHE_TTL_DAYS: ""
     volumes:
       - n8n_data:/home/node/.n8n
-      - ./n8n-super.env:/etc/n8n-super.env:ro
-      - ./requirements.txt:/home/node/.n8n/requirements.txt:ro
+      - ./config/n8n-super.env:/etc/n8n-super.env:ro
+      - ./config/requirements.txt:/home/node/.n8n/requirements.txt:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:5678/healthz >/dev/null || exit 1"]
       interval: 10s

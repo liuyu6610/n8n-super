@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# scripts/test.sh
+#
+# 说明：单容器模式（docker-compose.yml）的自检脚本。
 set -euo pipefail
 
 CONTAINER_NAME="${CONTAINER_NAME:-n8n-super}"

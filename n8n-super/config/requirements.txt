@@ -1,0 +1,2 @@
+# 示例依赖：首次执行 python3 时会自动安装（如开启 N8N_PYTHON_AUTO_INSTALL）
+requests==2.32.3

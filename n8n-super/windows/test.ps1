@@ -1,3 +1,13 @@
+# windows/test.ps1
+#
+# 作用：对单容器模式进行可用性自检。
+#
+# 检查项：
+# - /healthz 轮询直到超时
+# - n8n --version
+# - argocd version --client
+# - Python venv 基础依赖 python-fire import
+# - 社区节点 n8n-nodes-python package.json 可读取
 param(
   [string]$ContainerName = "n8n-super",
   [string]$HealthUrl = "http://localhost:5678/healthz",

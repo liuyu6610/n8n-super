@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# scripts/run-queue.sh
+#
+# 说明：Queue 模式（docker-compose.queue.yml）的启动脚本。
 set -euo pipefail
 
 BUILD=1
@@ -6,7 +9,7 @@ DETACHED=1
 
 usage() {
   cat <<'USAGE'
-Usage: ./run.sh [--no-build] [--no-detach]
+Usage: ./scripts/run-queue.sh [--no-build] [--no-detach]
 
   --no-build    Do not run "docker compose build" before starting
   --no-detach   Run "docker compose up" in foreground
@@ -35,12 +38,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+COMPOSE_FILE="$ROOT_DIR/docker-compose.queue.yml"
+
 if [[ "$BUILD" -eq 1 ]]; then
-  docker compose -f docker-compose.yml build
+  docker compose -f "$COMPOSE_FILE" build
 fi
 
 if [[ "$DETACHED" -eq 1 ]]; then
-  docker compose -f docker-compose.yml up -d
+  docker compose -f "$COMPOSE_FILE" up -d
 else
-  docker compose -f docker-compose.yml up
+  docker compose -f "$COMPOSE_FILE" up
 fi
