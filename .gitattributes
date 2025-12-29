@@ -1,0 +1,47 @@
+# Enforce LF endings for cross-platform collaboration
+# Goal: prevent CRLF from breaking shell scripts and container entrypoints
+
+# Default: treat files as text unless explicitly marked binary
+* text=auto
+
+# Shell scripts must be LF
+*.sh text eol=lf
+
+# Docker / Compose / YAML must be LF
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Env/config files must be LF
+*.env text eol=lf
+*.env.example text eol=lf
+
+# Markdown / docs
+*.md text eol=lf
+
+# PowerShell scripts: keep as text (Windows can handle LF; avoid CRLF pollution in repo)
+*.ps1 text eol=lf
+
+# JSON/TOML/INI
+*.json text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+
+# Common binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.bz2 binary
+*.7z binary
+*.jar binary
+*.war binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
