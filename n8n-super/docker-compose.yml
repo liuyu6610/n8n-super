@@ -1,37 +1,119 @@
+# docker-compose.yml（单容器模式 / 开发与小规模生产参考）
+#
+# 设计目标：
+# - 保持最小可运行形态：1 个 n8n 容器即可跑通（方便开发、PoC、小团队）。
+# - 通过 config/ 目录注入环境变量（n8n-super.env）与 Python 依赖（requirements.txt）。
+# - 启用健康检查，便于运维探活与自动重启。
+#
+# 注意：
+# - 当工作流达到“几百个”且并发较高时，建议使用 docker-compose.queue.yml（Queue 模式）。
+# - 本文件不包含 Postgres/Redis；n8n 会使用默认的 SQLite（存储在 /home/node/.n8n）。
+#
 services:
   n8n:
+    # build: 用当前目录（含 Dockerfile）构建镜像
+    # - 如果你只想使用已构建镜像，可删除 build 段并保留 image
     build:
       context: .
+
+    # image: 镜像名与版本（建议固定，避免多人环境漂移）
     image: n8n-super:1.78.1
+
+    # container_name: 固定容器名，方便脚本/排障（docker logs / docker exec）
     container_name: n8n-super
+
+    # restart: 容器退出后自动拉起（适合长期运行）
     restart: unless-stopped
+
+    # ports: 将容器内 5678 暴露到宿主机
+    # - 左边：宿主机端口；右边：容器端口
     ports:
       - "5678:5678"
+
     environment:
+      # --- n8n 基础能力 ---
+      # 允许加载社区节点（n8n-nodes-python 等）
       N8N_COMMUNITY_PACKAGES_ENABLED: "true"
+
+      # 开启队列健康检查（即使非 queue 模式，也建议开，便于 UI/监控）
       QUEUE_HEALTH_CHECK_ACTIVE: "true"
+
+      # 安全敏感：启用 Command（Execute Command）节点
+      # - n8n 默认会禁用部分高危节点
+      # - 设为 [] 表示不排除任何节点
+      # - 生产环境务必结合：认证、网络隔离、最小权限、审计等手段
       NODES_EXCLUDE: "[]"
+
+      # 时区：影响 Cron、日志时间、工作流时间函数
       GENERIC_TIMEZONE: "Asia/Shanghai"
+
+      # --- n8n-super 配置注入（推荐统一入口） ---
+      # N8N_SUPER_CONFIG_FILE: 容器启动时由 docker-entrypoint-extra.sh 加载
+      # - 该文件内可以放 pip 源、Python 自动装包开关等
       N8N_SUPER_CONFIG_FILE: "/etc/n8n-super.env"
+
+      # --- pip 源配置（企业内网加速）---
+      # 这些变量会在 entrypoint/python wrapper 中映射为 pip 标准变量：
+      # - PIP_INDEX_URL / PIP_EXTRA_INDEX_URL / PIP_TRUSTED_HOST / PIP_DEFAULT_TIMEOUT
+      # 留空表示“由 config/n8n-super.env 决定”（推荐）
       N8N_PIP_INDEX_URL: ""
       N8N_PIP_EXTRA_INDEX_URL: ""
       N8N_PIP_TRUSTED_HOST: ""
       N8N_PIP_DEFAULT_TIMEOUT: ""
+
+      # --- Python 运行时自动装包（n8n-nodes-python/PythonFunction）---
+      # N8N_PYTHON_AUTO_INSTALL:
+      # - true: 每次执行 python3 前按需 pip install（见 n8n-python3-wrapper.sh）
+      # - false: 不做自动安装
       N8N_PYTHON_AUTO_INSTALL: "false"
+
+      # N8N_PYTHON_PACKAGES:
+      # - 额外 pip 包列表（空格分隔），适合临时加包
+      # - 建议团队长期依赖用 requirements 文件方式 + 版本锁定
       N8N_PYTHON_PACKAGES: ""
+
+      # N8N_PYTHON_REQUIREMENTS_FILE:
+      # - requirements 文件路径（容器内路径）
+      # - 推荐通过 volumes 把 config/requirements.txt 挂载到 /home/node/.n8n/requirements.txt
       N8N_PYTHON_REQUIREMENTS_FILE: ""
+
+      # --- 企业多人场景：Python 独立 venv 缓存（按依赖 hash）---
+      # 作用：避免多人/多工作流依赖互相污染；同一套依赖复用缓存避免重复下载
       N8N_PYTHON_VENV_CACHE_DIR: "/home/node/.n8n/pyenvs"
+
+      # 可选：启动时清理旧 venv 缓存（按 mtime）
+      # - true/false
+      # - 建议在低峰期重启并设置合理 TTL，避免误删正在使用的 venv
       N8N_PYTHON_VENV_CACHE_CLEANUP: "false"
       N8N_PYTHON_VENV_CACHE_TTL_DAYS: ""
+
     volumes:
+      # n8n_data：n8n 数据目录（默认包含 SQLite DB、工作流、凭据、日志等）
+      # - 单容器模式下这是“最重要的持久化卷”
       - n8n_data:/home/node/.n8n
+
+      # 启动配置注入文件（只读）
       - ./config/n8n-super.env:/etc/n8n-super.env:ro
+
+      # Python 依赖文件（只读）
       - ./config/requirements.txt:/home/node/.n8n/requirements.txt:ro
+
     healthcheck:
+      # 探活命令：访问 /healthz
+      # - 说明：该端点由 n8n 提供，用于容器健康检查
       test: ["CMD-SHELL", "curl -fsS http://localhost:5678/healthz >/dev/null || exit 1"]
+
+      # interval: 探测间隔
       interval: 10s
+
+      # timeout: 单次探测超时
       timeout: 5s
+
+      # retries: 连续失败次数阈值
       retries: 30
 
 volumes:
+  # named volume：由 Docker 管理的持久化卷
+  # - 优点：不会被宿主机目录权限/路径影响，跨机器迁移更稳
+  # - 缺点：可视性不如 bind mount（需要 docker volume inspect）
   n8n_data:
