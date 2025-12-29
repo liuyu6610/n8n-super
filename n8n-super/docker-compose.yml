@@ -1,0 +1,34 @@
+services:
+  n8n:
+    build:
+      context: .
+    image: n8n-super:1.78.1
+    container_name: n8n-super
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_COMMUNITY_PACKAGES_ENABLED: "true"
+      QUEUE_HEALTH_CHECK_ACTIVE: "true"
+      NODES_EXCLUDE: "[]"
+      GENERIC_TIMEZONE: "Asia/Shanghai"
+      N8N_SUPER_CONFIG_FILE: "/etc/n8n-super.env"
+      N8N_PIP_INDEX_URL: ""
+      N8N_PIP_EXTRA_INDEX_URL: ""
+      N8N_PIP_TRUSTED_HOST: ""
+      N8N_PIP_DEFAULT_TIMEOUT: ""
+      N8N_PYTHON_AUTO_INSTALL: "false"
+      N8N_PYTHON_PACKAGES: ""
+      N8N_PYTHON_REQUIREMENTS_FILE: ""
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n-super.env:/etc/n8n-super.env:ro
+      - ./requirements.txt:/home/node/.n8n/requirements.txt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5678/healthz >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  n8n_data:
