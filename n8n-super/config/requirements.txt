@@ -1,2 +1,9 @@
-# 示例依赖：首次执行 python3 时会自动安装（如开启 N8N_PYTHON_AUTO_INSTALL）
+# 团队常用Python包（构建时预装到基础venv）
 requests==2.32.3
+PyYAML==6.0.2
+pandas==2.2.3
+numpy==2.2.3
+python-gitlab==5.3.0
+openpyxl==3.1.5
+pytz==2025.1
+python-dateutil==2.9.0

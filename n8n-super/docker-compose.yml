@@ -24,7 +24,11 @@ services:
       #   Windows(PowerShell): $env:COMMUNITY_NODES="n8n-nodes-python@1.2.3 n8n-nodes-xxx@4.5.6"; docker compose build
       #   Linux/macOS: COMMUNITY_NODES="..." docker compose build
       args:
-        COMMUNITY_NODES: ${COMMUNITY_NODES:-n8n-nodes-python}
+        COMMUNITY_NODES: ${COMMUNITY_NODES:-n8n-nodes-python n8n-nodes-dingtalk n8n-nodes-extended-gitlab n8n-nodes-jenkins n8n-nodes-kubernetes n8n-nodes-helm-chart n8n-nodes-ntfy@0.1.7 n8n-nodes-browser@0.2.2}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}
+        PIP_DEFAULT_TIMEOUT: ${PIP_DEFAULT_TIMEOUT:-60}
 
     # image: 镜像名与版本（建议固定，避免多人环境漂移）
     image: n8n-super:1.78.1

@@ -10,6 +10,59 @@
 - **ArgoCD**：预装 `argocd` CLI，可在工作流里用 Execute Command 节点调用
 - **Jenkins / GitLab**：n8n 内置节点（无需额外安装）
 
+## 适用场景（你应该选哪种方式）
+
+- **场景A：团队多人共用同一个 n8n，但每个 workflow 的 Python 依赖不同**
+  - 使用本项目的“**按依赖 hash 的独立 venv 缓存**”（默认机制）。
+  - 通过 `N8N_PYTHON_REQUIREMENTS_FILE` / `N8N_PYTHON_PACKAGES` 配置依赖集合。
+  - 优点：依赖不会互相覆盖；同一套依赖会复用缓存。
+- **场景B：团队希望统一一套 Python 依赖（所有人都一致）**
+  - 统一维护 `config/requirements.txt`（建议固定版本）。
+  - 优点：可控、可审计、可复现；适合生产。
+- **场景C：某个同学/某条线需要额外的工具或社区节点，不希望影响团队默认镜像**
+  - 每个人构建自己的镜像 tag（例如 `n8n-super:1.78.1-zhangsan-20260101`），或基于 `n8n-super` 写自己的 Dockerfile。
+  - 优点：彻底隔离；适合“个人实验/专项需求”。
+
+## 关键设计（必须理解，否则容易踩坑）
+
+### 1) Python 依赖是如何做到“多人不互相污染”的
+
+本镜像里有两个层次的 venv：
+
+- **基础 venv（Base venv）**
+  - 路径：`/opt/n8n-python-venv`
+  - 在镜像构建期创建，用于提供一个“稳定的 Python 运行入口”。
+  - 只安装极少数基础依赖（例如 `python-fire`）。
+- **独立 venv（Isolated venv，按依赖 hash）**
+  - 路径：默认在 `/home/node/.n8n/pyenvs/<hash>`
+  - 由 `n8n-python3-wrapper.sh` 在运行时创建/复用。
+  - 每套依赖集合（requirements 内容 + pip 源参数 + packages + extra args）会得到一个唯一 hash。
+  - **不同 hash -> 不同 venv**（互不影响），**相同 hash -> 复用同一 venv**（避免重复安装）。
+
+因此：
+
+- 你不需要为了“某个 workflow 多装几个包”去重打整个镜像。
+- 也不要在运行中的容器里手工 `pip install` 到基础 venv（那样会回到“互相覆盖、不可运维”的老路）。
+
+### 2) requirements / packages 改了为什么不一定立刻生效
+
+独立 venv 的创建/安装是由 `python3` wrapper 在“执行 Python 时”触发的：
+
+- 如果你只是修改了 `config/requirements.txt`，但还没有执行任何 Python 节点，那么不会触发安装。
+- 一旦有 PythonFunction 执行，wrapper 会基于当前依赖集合计算 hash：
+  - hash 变化 -> 新建一个目录并安装
+  - hash 不变 -> 直接复用缓存
+
+### 3) `named volume` vs `bind mount` 对社区节点的影响
+
+`docker-compose.yml` 默认用 `named volume` 挂载 `/home/node/.n8n`，首次创建该 volume 时会继承镜像里的预装节点目录。
+
+如果你改为 `bind mount`（把宿主机目录直接挂进去），第一次启动可能覆盖镜像内的 `/home/node/.n8n`，导致：
+
+- UI 里看不到社区节点（因为 `/home/node/.n8n/nodes` 被你宿主机目录覆盖了）
+
+这个是 Docker 行为，不是 n8n-super 的 bug。
+
 ## 目录结构
 
 - `Dockerfile`：镜像构建文件
@@ -372,6 +425,99 @@ docker compose -f docker-compose.queue.yml up -d --scale n8n-worker=3
 - `N8N_PYTHON_AUTO_INSTALL="true"`
 - `N8N_PYTHON_REQUIREMENTS_FILE="/home/node/.n8n/requirements.txt"`
 
+#### 1.1 团队统一依赖（推荐生产）
+
+- 你们把团队默认依赖放进 `config/requirements.txt`。
+- 依赖建议固定版本（例如 `requests==2.32.3`），避免“今天能跑明天不能跑”。
+- 使用 `docker-compose.yml` 里现成的挂载：`./config/requirements.txt:/home/node/.n8n/requirements.txt:ro`。
+- `config/n8n-super.env` 中启用：
+  - `N8N_PYTHON_AUTO_INSTALL="true"`
+  - `N8N_PYTHON_REQUIREMENTS_FILE="/home/node/.n8n/requirements.txt"`
+
+#### 1.2 个人临时加包（不影响团队默认依赖）
+
+## Python 维护与装包策略（团队平台：强烈建议按此执行）
+
+你们的目标是：
+
+- **第一次构建镜像时**就把“团队常用包”装好（减少运行期下载/网络依赖）
+- pip 源/代理是**长期固定**的，容器启动时自动注入（也允许关闭）
+- 后续新增包尽量**不重建镜像**，避免发版/重建影响运行中的 workflows
+
+### 1) 构建期预装：把常用包固化到基础 venv
+
+本项目会在构建阶段把 `config/requirements.txt` 里的内容预装到基础 venv：
+
+- 基础 venv 路径：`/opt/n8n-python-venv`
+- 运行时独立 venv（hash）创建时使用 `--system-site-packages`，因此能“看见”基础 venv 里已安装的包。
+
+效果：
+
+- 大多数 workflows 常用包（例如 `requests`）**不会在运行时重复下载/安装**。
+- 个别 workflow 需要特殊版本时，仍可在独立 venv 内覆盖安装，不会污染基础 venv。
+
+构建一个“新版本镜像 tag”并预装常用包（推荐维护者执行）：
+
+1) 更新 `config/requirements.txt`（团队常用包集合，建议固定版本）
+2) 构建新镜像 tag（构建时会把 requirements 预装进基础 venv）
+
+Windows 示例（使用固定 pip 源/代理构建期下载）：
+
+```powershell
+$env:PIP_INDEX_URL="https://pip.xxx.com/simple"
+$env:PIP_TRUSTED_HOST="pip.xxx.com"
+.\windows\build.ps1 -Tag "n8n-super:1.78.1-r1"
+```
+
+Linux/macOS 示例：
+
+```bash
+PIP_INDEX_URL="https://pip.xxx.com/simple" PIP_TRUSTED_HOST="pip.xxx.com" ./scripts/build.sh n8n-super:1.78.1-r1
+```
+
+### 2) 长期固定 pip 源/代理：默认自动注入，也可关闭
+
+推荐把公司 pip 源/代理写在 `config/n8n-super.env`，由容器启动时自动注入：
+
+- `N8N_PIP_INDEX_URL`
+- `N8N_PIP_EXTRA_INDEX_URL`
+- `N8N_PIP_TRUSTED_HOST`
+- `N8N_PIP_DEFAULT_TIMEOUT`
+
+该注入逻辑是“有值才注入”：
+
+- 你设置了 `N8N_PIP_INDEX_URL` 才会映射到 `PIP_INDEX_URL`
+- 如果你不想注入，把这些变量留空即可
+
+### 3) 新增包的推荐流程：改 requirements -> 自动生成新 venv（不重建镜像）
+
+当你们发现某些 workflows 需要新增 Python 包时，推荐流程是：
+
+1) 在 `config/requirements.txt` 增加包并固定版本
+2) 把更新后的 `requirements.txt` 通过 volume 挂载到容器内（本项目默认已挂载到 `/home/node/.n8n/requirements.txt`）
+3) 重启容器或等待下一次 PythonFunction 执行
+
+运行效果：
+
+- `python3` wrapper 会基于 requirements 内容 hash 创建一个新的独立 venv 目录
+- 旧的 venv 不会被覆盖（因此“历史依赖集合”仍然存在）
+
+注意：
+
+- requirements 变更会让“后续执行”落到新 venv，这是预期行为。
+- 如果你们希望某个 workflow 长期绑定某套依赖，建议走 Execute Command 的“进程级注入”方式，或按业务域拆分实例。
+
+如果某位同学临时需要一些包（例如 `pandas`），但不希望把它加入团队统一 requirements：
+
+- 方式A：在自己的运行环境里（例如自己机器/自己 compose）设置：
+  - `N8N_PYTHON_PACKAGES="pandas==<version>"`
+- 方式B：不改 compose，把个人配置写到 **自己的** `n8n-super.env`（不要提交到 git），然后挂载。
+
+注意：
+
+- 不同同学的 `N8N_PYTHON_PACKAGES` 不会互相覆盖，因为最终落到不同 hash 的独立 venv。
+- 如果你们共用同一个持久化卷 `/home/node/.n8n`，那么缓存目录默认也是共享的；共享缓存不等于互相污染（hash 隔离），但会占用空间，需要规划 TTL 清理策略。
+
 ### 2) 设置/更换 pip 源（公开/企业都适用）
 
 在 `config/n8n-super.env` 中设置：
@@ -442,12 +588,238 @@ build:
 
 然后在 n8n 中使用 **Execute Command** 节点调用这些工具。
 
+## 团队协作：8 人共用一个“团队标准镜像”（推荐 SOP）
+
+你们当前的目标是：**全员使用同一个镜像**，避免出现“每个人本地构建出来都不一样”的漂移。
+
+### 1) 团队标准镜像的职责边界（建议统一口径）
+
+- **镜像里固化的内容（需要重新 build + 发版）**
+  - 系统工具/CLI（例如 `argocd` / `kubectl` / `helm`）
+  - n8n 社区节点（npm 包，例如 `n8n-nodes-xxx`）
+- **不建议固化到镜像、而是运行时配置的内容（仅修改配置文件/requirements）**
+  - Python 包（通过 `N8N_PYTHON_REQUIREMENTS_FILE` / `N8N_PYTHON_PACKAGES`）
+  - pip 源（`N8N_PIP_*` -> `PIP_*`）
+
+这样做的好处是：
+
+- 社区节点/CLI 变更可审计、可回滚（发版）
+- Python 包需求变化频繁，走运行期安装 + hash 隔离更稳（不必频繁重打镜像）
+
+### 2) 统一变更入口（8 人协作时必须明确）
+
+- **Python 统一依赖**：只允许改 `config/requirements.txt`（建议固定版本）。
+- **pip 源/自动装包策略**：只允许改 `config/n8n-super.env`。
+- **社区节点（npm）**：只允许通过 `COMMUNITY_NODES`（构建期）或修改 `Dockerfile` 的安装行来变更，并固定版本。
+- **镜像基础版本升级（n8n 版本）**：只允许维护者改 `Dockerfile` 的 `FROM n8nio/n8n:<version>` 并走完整回归测试。
+
+### 3) 团队标准镜像的 tag 策略（建议）
+
+建议用“可回滚”的 tag：
+
+- `n8n-super:1.78.1-r1`
+- `n8n-super:1.78.1-r2`
+
+其中：
+
+- `1.78.1` 对齐上游 n8n 版本
+- `rN` 表示你们团队在该基础上的第 N 次发布
+
+### 4) 团队镜像构建（统一方式，避免不一致）
+
+你们可以统一由 1-2 个维护者负责 build+发版，其余同学只拉取使用。
+
+#### 方式A：用 docker compose build（推荐本地验证）
+
+- Windows PowerShell：
+
+```powershell
+$env:COMMUNITY_NODES="n8n-nodes-python@0.1.4"
+docker compose -f docker-compose.yml build --no-cache
+```
+
+#### 方式B：用构建脚本 build（推荐做发版流水线/标准化）
+
+说明：目前 `scripts/build.sh` 与 `windows/build.ps1` 已支持透传构建期参数：
+
+- `COMMUNITY_NODES`
+- `ARGOCD_VERSION`
+
+Windows 示例：
+
+```powershell
+.\windows\build.ps1 -Tag "n8n-super:1.78.1-r1" -CommunityNodes "n8n-nodes-python@0.1.4" -ArgoCdVersion "v2.13.3"
+```
+
+Linux/macOS 示例：
+
+```bash
+COMMUNITY_NODES="n8n-nodes-python@0.1.4" ARGOCD_VERSION="v2.13.3" ./scripts/build.sh n8n-super:1.78.1-r1
+```
+
+### 5) 团队发布后的使用方式（推荐）
+
+- **团队只用一个镜像 tag**：在 `docker-compose.yml` 里把 `image:` 固定到团队发布的 tag（例如 `n8n-super:1.78.1-r1`）。
+- 其他同学只需要：
+  - `docker compose pull`（如果你们推送到了镜像仓库）
+  - `docker compose up -d --force-recreate`
+
+### 6) 发版回归测试（强制执行）
+
+- 单容器模式：
+  - Linux/macOS：`./scripts/test.sh`
+  - Windows：`.\windows\test.ps1`
+- Queue 模式：
+  - Linux/macOS：`./scripts/test-queue.sh`
+  - Windows：`.\windows\test-queue.ps1`
+
+## 后续：如何编写你自己的 Dockerfile（在 n8n-super 基础上扩展）
+
+当你需要把某些能力固化到镜像里（离线环境、强审计、严格可复现），推荐用继承方式：
+
+```dockerfile
+FROM n8n-super:1.78.1
+
+USER root
+
+# 示例：安装额外系统工具（建议固定版本/校验）
+RUN set -eux; \
+  if command -v apt-get >/dev/null 2>&1; then \
+    apt-get update && apt-get install -y --no-install-recommends \
+      netcat-traditional \
+    && rm -rf /var/lib/apt/lists/*; \
+  elif command -v apk >/dev/null 2>&1; then \
+    apk add --no-cache \
+      netcat-openbsd \
+    ; \
+  else \
+    echo "Unsupported base image" >&2; \
+    exit 1; \
+  fi
+
+USER node
+```
+
+说明：
+
+- “只需要加 Python 包”的需求，优先用运行期 hash 隔离安装（`N8N_PYTHON_PACKAGES` / requirements 文件），通常不需要写 Dockerfile。
+- 你要固化到镜像里的东西，通常是：
+  - 系统包/CLI 工具（kubectl/helm/terraform/企业自研二进制）
+  - 社区节点（npm 包），且需要固定版本、可审计
+
+## 推荐的团队落地规范（建议写进你们团队 SOP）
+
+- **默认镜像**：由少数维护者维护（固定版本、回归测试、发布 tag）。
+- **个人需求优先用运行期 Python hash 隔离**：用 `N8N_PYTHON_PACKAGES` 或个人 requirements 文件。
+- **确需固化的东西才重打个人镜像**：统一 tag 命名规则，避免覆盖。
+- **不要在运行中的容器里手工装依赖**：不可复现，重建易丢。
+- **生产建议用 Queue 模式 + Postgres/Redis**：见 `docker-compose.queue.yml`。
+
 ## 生产使用建议
 
 - **强烈建议启用认证与访问控制**：不要裸奔暴露到公网。
 - **谨慎启用 Command 节点**：`NODES_EXCLUDE: "[]"` 会启用 `Command`（可执行任意命令）。
 - **数据持久化与备份**：`/home/node/.n8n` 请做定期备份（workflows/credentials/配置）。
 - **依赖供应链风险**：自动 `pip install` 本质会从外部源拉包，建议企业环境使用内网镜像源 + 版本锁定。
+
+## 团队共用同一 n8n 实例（多 workflow、多维护人）的运维要点
+
+你们的形态是：
+
+- **同一个 n8n 实例里有很多 workflows**
+- 不同 workflows 由不同人维护，部分 workflows 可能多人共管
+
+这类“平台型 n8n”运维要点和个人自测完全不同，建议至少做到以下几条：
+
+### 0) Workflow 治理规范（建议团队统一，否则会迅速失控）
+
+- **命名规范**：建议按业务域/项目/用途分层，例如：`ops/backup/postgres-daily`、`data/etl/user-sync`。
+- **Tag/归属**（n8n UI 支持 workflow tags）：
+  - `owner:<name>`（主维护人）
+  - `team:<name>`（归属团队）
+  - `env:prod|staging|dev`（运行环境）
+  - `tier:critical|normal`（重要程度）
+- **变更流程**：
+  - 关键 workflows（`tier:critical`）必须走评审（至少 1 人 review）。
+  - 禁止在生产实例上“随手改完就走”，至少要求变更备注（改了什么、为什么、回滚点）。
+- **凭据（Credentials）管理**：
+  - 凭据尽量按“系统/业务域”拆分，不要所有 workflows 共用一个万能账号。
+  - 变更凭据要有影响面评估：哪些 workflows 依赖这个 credential。
+  - 生产环境建议接入更强的密钥管理（后续 K8s 可用 Secret/外部密钥系统）。
+
+### 1) 强制固定加密密钥（否则重建/迁移会出事故）
+
+n8n 的 credentials 是加密存储的。多人共用实例时，必须固定 `N8N_ENCRYPTION_KEY`（或者你们当前版本对应的加密 key 环境变量），否则：
+
+- 容器重建/迁移后可能无法解密历史 credentials
+
+建议做法：
+
+- 单机/compose：把 key 固定写在 `config/n8n-super.env`（或单独的 secret 文件），并确保所有副本一致。
+- K8s：用 Secret 管理，并注入到所有 n8n 组件（web/worker/webhook）。
+
+### 2) 推荐默认形态：Queue + Postgres + Redis
+
+多人共用、workflow 数量上来后，不建议长期使用 SQLite 单实例形态。
+
+- 生产推荐：`docker-compose.queue.yml`（web/worker/webhook + postgres + redis）
+- 后续上 K8s 基本可 1:1 迁移为 Deployment/StatefulSet
+
+### 3) 备份/恢复的“最小集合”
+
+- **如果你用 SQLite 单容器模式**：核心是 `/home/node/.n8n`（包含 SQLite DB、workflows、credentials 等）
+- **如果你用 Postgres（推荐）**：
+  - 备份 Postgres 数据库（RDS/自建都要有备份策略）
+  - `/home/node/.n8n` 仍要持久化（至少包含部分运行时数据与自定义目录）
+
+### 4) 团队升级/回滚的推荐命令（避免“镜像更新了但容器没换”）
+
+本仓库脚本已支持 `--pull` 与 `--force-recreate`：
+
+- Linux/macOS（单容器）：
+
+```bash
+./scripts/run.sh --pull --force-recreate
+```
+
+- Linux/macOS（Queue）：
+
+```bash
+./scripts/run-queue.sh --pull --force-recreate
+```
+
+- Windows（单容器）：
+
+```powershell
+.\windows\run.ps1 -Pull -ForceRecreate
+```
+
+- Windows（Queue）：
+
+```powershell
+.\windows\run-queue.ps1 -Pull -ForceRecreate
+```
+
+### 5) Python 依赖：按 workflow 定制的现实限制与可行方案
+
+你们常见诉求是：不同 workflows 需要不同 Python 包。
+
+本镜像的 `python3` wrapper 能做到“**按依赖集合 hash 创建独立 venv 缓存**”，但前提是：**运行该 Python 进程时能指定 requirements/packages**。
+
+需要明确的一点：
+
+- **PythonFunction（n8n-nodes-python）节点执行 Python 时，环境变量来自容器/进程环境**。
+- 也就是说：如果你们希望“不同 workflow 用不同 requirements 文件”，仅靠 UI 直接切换 `N8N_PYTHON_REQUIREMENTS_FILE` 做不到（它是容器级变量，不是 workflow 级变量）。
+
+推荐的落地方案（按优先级）：
+
+- **方案A（团队推荐）**：统一维护一份团队级 `config/requirements.txt`
+  - 覆盖 80% 场景，最稳定、最可控。
+- **方案B（确需隔离且依赖差异大）**：用 **Execute Command** 节点执行 Python
+  - 在命令里为该进程注入 `N8N_PYTHON_PACKAGES` / `N8N_PYTHON_REQUIREMENTS_FILE`，实现“每个 workflow 自己决定依赖集合”。
+  - 这种方式依赖 Command 节点能力，注意安全隔离与权限。
+- **方案C（长期演进）**：按业务域拆分多个 n8n 实例（或多 namespace/多 release）
+  - 当 workflows 数量、依赖差异、权限边界变得复杂时，这是最清晰的治理方式。
 
 ## FAQ / 排障
 

@@ -12,11 +12,15 @@
 #   .\windows\run.ps1 -Detached:$false
 param(
   [switch]$Build,
-  [switch]$Detached
+  [switch]$Detached,
+  [switch]$Pull,
+  [switch]$ForceRecreate
 )
 
 if (-not $PSBoundParameters.ContainsKey('Build')) { $Build = $true }
 if (-not $PSBoundParameters.ContainsKey('Detached')) { $Detached = $true }
+if (-not $PSBoundParameters.ContainsKey('Pull')) { $Pull = $false }
+if (-not $PSBoundParameters.ContainsKey('ForceRecreate')) { $ForceRecreate = $false }
 
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ComposeFile = Join-Path $RootDir "docker-compose.yml"
@@ -25,8 +29,17 @@ if ($Build) {
   docker compose -f $ComposeFile build
 }
 
+if ($Pull) {
+  docker compose -f $ComposeFile pull
+}
+
+$upArgs = @()
+if ($ForceRecreate) {
+  $upArgs += "--force-recreate"
+}
+
 if ($Detached) {
-  docker compose -f $ComposeFile up -d
+  docker compose -f $ComposeFile up -d @upArgs
 } else {
-  docker compose -f $ComposeFile up
+  docker compose -f $ComposeFile up @upArgs
 }

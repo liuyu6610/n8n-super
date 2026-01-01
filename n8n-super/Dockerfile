@@ -26,6 +26,9 @@ USER root
 # - wrapper 会按环境变量执行“自动装包 + 独立 venv 缓存”（详见 n8n-python3-wrapper.sh）
 COPY n8n-python3-wrapper.sh /usr/local/bin/n8n-python3-wrapper.sh
 
+# Team default python requirements (preinstall at build time)
+COPY config/requirements.txt /opt/n8n-super-requirements.txt
+
 # Install system tooling
 #
 # 兼容策略：
@@ -89,6 +92,10 @@ RUN set -eux; \
 # - 团队多人共用同一 n8n 时，不同 workflow 的依赖不会互相覆盖
 # - 相同依赖集合可复用缓存，避免重复下载
 ENV N8N_PYTHON_VENV=/opt/n8n-python-venv
+ARG PIP_INDEX_URL
+ARG PIP_EXTRA_INDEX_URL
+ARG PIP_TRUSTED_HOST
+ARG PIP_DEFAULT_TIMEOUT
 RUN set -eux; \
   if command -v apk >/dev/null 2>&1; then \
     virtualenv -p python3 "${N8N_PYTHON_VENV}"; \
@@ -99,6 +106,14 @@ RUN set -eux; \
   "${N8N_PYTHON_VENV}/bin/pip" install --no-cache-dir --upgrade pip setuptools wheel; \
   # PythonFunction 依赖 python-fire（基础必备），安装到基础 venv
   "${N8N_PYTHON_VENV}/bin/pip" install --no-cache-dir python-fire; \
+  # Preinstall team common python deps into base venv (visible to isolated venv via --system-site-packages)
+  if [ -f /opt/n8n-super-requirements.txt ]; then \
+    PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
+    PIP_EXTRA_INDEX_URL="${PIP_EXTRA_INDEX_URL:-}" \
+    PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
+    PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-}" \
+    "${N8N_PYTHON_VENV}/bin/pip" install --no-cache-dir -r /opt/n8n-super-requirements.txt; \
+  fi; \
   # 确保 wrapper 可执行
   chmod +x /usr/local/bin/n8n-python3-wrapper.sh; \
   # 将基础 venv 的 python3 重命名为 python3-real，并用 wrapper 替换 python3
@@ -146,7 +161,7 @@ RUN set -eux; \
 # 注意：
 # - 这里用空格分隔多个 npm 包名（npm install 支持）
 # - 强烈建议固定版本，避免拉取 latest 导致不可复现
-ARG COMMUNITY_NODES="n8n-nodes-python"
+ARG COMMUNITY_NODES="n8n-nodes-python n8n-nodes-dingtalk n8n-nodes-extended-gitlab n8n-nodes-jenkins n8n-nodes-kubernetes n8n-nodes-helm-chart n8n-nodes-ntfy@0.1.7 n8n-nodes-browser@0.2.2"
 RUN set -eux; \
   npm config set fund false; \
   npm config set audit false; \
