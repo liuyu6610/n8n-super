@@ -34,7 +34,12 @@ if (Test-Path $BuildEnvFile) {
 
 $composeFile = Join-Path $RootDir "docker-compose.yml"
 if ($Queue) {
-  $composeFile = Join-Path $RootDir "docker-compose.queue.yml"
+  $queueComposeFile = Join-Path $RootDir "docker-compose-queue.yml"
+  if (Test-Path $queueComposeFile) {
+    $composeFile = $queueComposeFile
+  } else {
+    $composeFile = Join-Path $RootDir "docker-compose.queue.yml"
+  }
 }
 
 if (-not $NoBuild) {

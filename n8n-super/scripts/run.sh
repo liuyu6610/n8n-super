@@ -45,7 +45,7 @@ usage() {
   cat <<'USAGE'
 Usage: ./scripts/run.sh [--queue] [--no-build] [--no-detach] [--pull] [--force-recreate]
 
-  --queue           Use docker-compose.queue.yml
+  --queue           Use docker-compose-queue.yml
   --no-build        Do not run "docker compose build" before starting
   --no-detach       Run "docker compose up" in foreground
   --pull            Pull images before starting
@@ -91,7 +91,11 @@ load_build_env
 
 COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
 if [[ "$QUEUE" -eq 1 ]]; then
-  COMPOSE_FILE="$ROOT_DIR/docker-compose.queue.yml"
+  if [[ -f "$ROOT_DIR/docker-compose-queue.yml" ]]; then
+    COMPOSE_FILE="$ROOT_DIR/docker-compose-queue.yml"
+  else
+    COMPOSE_FILE="$ROOT_DIR/docker-compose.queue.yml"
+  fi
 fi
 
 if [[ "$BUILD" -eq 1 ]]; then

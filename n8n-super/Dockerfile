@@ -184,10 +184,25 @@ RUN set -eux; \
 #     --build-arg COMMUNITY_NODES="n8n-nodes-python@<ver> n8n-nodes-xxx@1.2.3" \
 #     -t n8n-super:1.78.1 .
 #
+# 你可以选择以下几种方式把 `n8n-nodes-python@0.1.4` 固化到镜像：
+#
+# 方式A（推荐团队统一）：维护 config/community-nodes.list（每行一个包，固定版本）
+#   n8n-nodes-python@0.1.4
+#   n8n-nodes-xxx@1.2.3
+#
+# 方式B（临时覆盖）：构建时传入 build-arg COMMUNITY_NODES（空格分隔多个包）
+#   docker build --build-arg COMMUNITY_NODES="n8n-nodes-python@0.1.4" -t n8n-super:1.78.1-rX .
+#
+# 方式C（强制兜底）：若既未传 COMMUNITY_NODES、又没有 list 文件（或 list 为空），则 Dockerfile 会兜底安装 COMMUNITY_NODES_FALLBACK
+# - 默认至少包含 n8n-nodes-python@0.1.4
+# - 你可以按需扩展为多个包（空格分隔）
+#
 # 注意：
 # - 这里用空格分隔多个 npm 包名（npm install 支持）
 # - 强烈建议固定版本，避免拉取 latest 导致不可复现
 ARG COMMUNITY_NODES=""
+# ARG COMMUNITY_NODES_FALLBACK="n8n-nodes-python@0.1.4 n8n-nodes-browser@0.2.4 n8n-nodes-ntfy@0.1.7"
+ARG COMMUNITY_NODES_FALLBACK="n8n-nodes-python@0.1.4"
  RUN set -eux; \
   npm config set fund false; \
   npm config set audit false; \
@@ -199,10 +214,13 @@ ARG COMMUNITY_NODES=""
   if [ -z "${nodes_to_install}" ] && [ -f /opt/n8n-super-community-nodes.list ]; then \
     nodes_to_install="$(grep -vE '^\s*(#|$)' /opt/n8n-super-community-nodes.list | tr -d '\r' | tr '\n' ' ')"; \
   fi; \
+  if [ -z "${nodes_to_install}" ]; then \
+    nodes_to_install="${COMMUNITY_NODES_FALLBACK}"; \
+  fi; \
   npm install --no-fund --no-audit --omit=dev ${nodes_to_install}; \
-  # Build-time verification: ensure key community nodes are present and loadable.
-  # If any of these fails, the image build should fail fast.
-  node -e "const base='/home/node/.n8n/nodes/node_modules'; const checks=[['n8n-nodes-browser', base + '/n8n-nodes-browser/dist/nodes/Browser/Browser.node.js', 'Browser'],['n8n-nodes-dingtalk', base + '/n8n-nodes-dingtalk/dist/nodes/DingTalk/DingTalk.node.js', 'DingTalk'],['n8n-nodes-extended-gitlab', base + '/n8n-nodes-extended-gitlab/dist/nodes/GitlabExtended/GitlabExtended.node.js', 'GitlabExtended'],['n8n-nodes-helm-chart', base + '/n8n-nodes-helm-chart/dist/nodes/HelmChart/HelmChart.node.js', 'HelmChart'],['n8n-nodes-ntfy', base + '/n8n-nodes-ntfy/dist/nodes/Ntfy/Ntfy.node.js', 'Ntfy'],['n8n-nodes-kubernetes', base + '/n8n-nodes-kubernetes/dist/nodes/Docker/Docker.node.js', 'Docker']]; let failed=false; for (const c of checks){ const pkg=c[0], file=c[1], key=c[2]; try{ const mod=require(file); const C=mod && mod[key]; if (typeof C!=='function') throw new Error('missing export '+key); const inst=new C(); const name=inst && inst.description && inst.description.name; if (!name) throw new Error('missing instance.description.name'); console.log('[n8n-super] verify ok: '+pkg+' -> '+name); } catch(e){ failed=true; console.error('[n8n-super] verify failed: '+pkg+' ('+file+'): '+e.message); } } if (failed) process.exit(1);"; \
+  # Build-time verification: ensure installed community nodes exist under node_modules.
+  # Auto-generated from package.json dependencies so we don't need to maintain a hardcoded list.
+  node -e "const fs=require('fs'); const path=require('path'); const pkgJson=path.join('/home/node/.n8n/nodes','package.json'); const base=path.join('/home/node/.n8n/nodes','node_modules'); const root=JSON.parse(fs.readFileSync(pkgJson,'utf8')); const deps=Object.keys(root.dependencies||{}); let failed=false; for (const d of deps){ const p=path.join(base,d,'package.json'); try{ const meta=JSON.parse(fs.readFileSync(p,'utf8')); console.log('[n8n-super] verify ok: '+meta.name+'@'+meta.version); } catch(e){ failed=true; console.error('[n8n-super] verify failed: missing/invalid '+p+' ('+e.message+')'); } } if (failed) process.exit(1);"; \
   rm -rf /opt/n8n-super-prebuilt-nodes; \
   mkdir -p /opt/n8n-super-prebuilt-nodes; \
   cp -a /home/node/.n8n/nodes/package.json /opt/n8n-super-prebuilt-nodes/; \
