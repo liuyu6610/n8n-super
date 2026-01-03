@@ -92,4 +92,80 @@ fi
 	fi
  fi
 
+ # Community nodes sync
+ #
+ # 说明：
+ # - docker-compose.yml 通常会把 /home/node/.n8n 挂载成 volume（持久化）
+ # - 这会覆盖镜像构建时写入 /home/node/.n8n/nodes 的内容
+ # - 因此我们在构建时把预装社区节点备份到 /opt/n8n-super-prebuilt-nodes
+ # - 启动时首次同步到 volume 内，保证 UI 能加载到节点
+ PREBUILT_DIR="/opt/n8n-super-prebuilt-nodes"
+ N8N_NODES_DIR="/home/node/.n8n/nodes"
+ SYNC_MARKER="${N8N_NODES_DIR}/.n8n-super-prebuilt-synced"
+ if [ -d "${PREBUILT_DIR}" ] && [ -f "${PREBUILT_DIR}/package.json" ]; then
+	CUSTOM_DIR="/home/node/.n8n/custom"
+	CUSTOM_MARKER="${CUSTOM_DIR}/.n8n-super-prebuilt-synced"
+	CUSTOM_PATCH_MARKER="${CUSTOM_DIR}/.n8n-super-prebuilt-patched"
+	prebuilt_hash=""
+	if command -v sha256sum >/dev/null 2>&1; then
+		prebuilt_hash="$(sha256sum "${PREBUILT_DIR}/package.json" | cut -d" " -f1)"
+	fi
+	mkdir -p "${CUSTOM_DIR}" || true
+	old_custom_hash=""
+	if [ -f "${CUSTOM_MARKER}" ]; then old_custom_hash="$(cat "${CUSTOM_MARKER}" 2>/dev/null || true)"; fi
+	if [ ! -f "${CUSTOM_MARKER}" ] || [ -n "${prebuilt_hash}" ] && [ "${old_custom_hash}" != "${prebuilt_hash}" ]; then
+		echo "[n8n-super] Syncing prebuilt community nodes into ${CUSTOM_DIR}"
+		if command -v rsync >/dev/null 2>&1; then
+			rsync -a --delete "${PREBUILT_DIR}/" "${CUSTOM_DIR}/"
+		else
+			rm -rf "${CUSTOM_DIR}/node_modules" "${CUSTOM_DIR}/package.json" "${CUSTOM_DIR}/package-lock.json" 2>/dev/null || true
+			cp -a "${PREBUILT_DIR}/." "${CUSTOM_DIR}/"
+		fi
+		if [ -n "${prebuilt_hash}" ]; then
+			echo "${prebuilt_hash}" > "${CUSTOM_MARKER}" || true
+		else
+			touch "${CUSTOM_MARKER}" || true
+		fi
+	fi
+
+	# Compatibility patch for some community packages
+	# - n8n-nodes-dingtalk: node refers to credential name 'dingtalkApi' but credential exported is 'dingTalkApi'
+	# - patch dist file in-place (one-time) to keep n8n startup stable and node available in UI
+	old_patch_hash=""
+	if [ -f "${CUSTOM_PATCH_MARKER}" ]; then old_patch_hash="$(cat "${CUSTOM_PATCH_MARKER}" 2>/dev/null || true)"; fi
+	if [ ! -f "${CUSTOM_PATCH_MARKER}" ] || [ -n "${prebuilt_hash}" ] && [ "${old_patch_hash}" != "${prebuilt_hash}" ]; then
+		DINGTALK_NODE_JS="${CUSTOM_DIR}/node_modules/n8n-nodes-dingtalk/dist/nodes/DingTalk/DingTalk.node.js"
+		if [ -f "${DINGTALK_NODE_JS}" ]; then
+			# BusyBox sed does not support \xNN escapes; use literal quotes.
+			sed -i "s/name: 'dingtalkApi'/name: 'dingTalkApi'/g" "${DINGTALK_NODE_JS}" || true
+			# Repair any previous incorrect patch results like: name: x27dingTalkApix27,
+			sed -i "s/name: x27dingtalkApix27/name: 'dingTalkApi'/g" "${DINGTALK_NODE_JS}" || true
+			sed -i "s/name: x27dingTalkApix27/name: 'dingTalkApi'/g" "${DINGTALK_NODE_JS}" || true
+		fi
+		if [ -n "${prebuilt_hash}" ]; then
+			echo "${prebuilt_hash}" > "${CUSTOM_PATCH_MARKER}" || true
+		else
+			touch "${CUSTOM_PATCH_MARKER}" || true
+		fi
+	fi
+
+	mkdir -p "${N8N_NODES_DIR}" || true
+	old_nodes_hash=""
+	if [ -f "${SYNC_MARKER}" ]; then old_nodes_hash="$(cat "${SYNC_MARKER}" 2>/dev/null || true)"; fi
+	if [ ! -f "${SYNC_MARKER}" ] || [ -n "${prebuilt_hash}" ] && [ "${old_nodes_hash}" != "${prebuilt_hash}" ]; then
+		echo "[n8n-super] Syncing prebuilt community nodes into ${N8N_NODES_DIR}"
+		if command -v rsync >/dev/null 2>&1; then
+			rsync -a --delete "${PREBUILT_DIR}/" "${N8N_NODES_DIR}/"
+		else
+			rm -rf "${N8N_NODES_DIR}/node_modules" "${N8N_NODES_DIR}/package.json" "${N8N_NODES_DIR}/package-lock.json" 2>/dev/null || true
+			cp -a "${PREBUILT_DIR}/." "${N8N_NODES_DIR}/"
+		fi
+		if [ -n "${prebuilt_hash}" ]; then
+			echo "${prebuilt_hash}" > "${SYNC_MARKER}" || true
+		else
+			touch "${SYNC_MARKER}" || true
+		fi
+	fi
+ fi
+
 exec /docker-entrypoint.sh "$@"

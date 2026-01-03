@@ -1,0 +1,1784 @@
+<<<<<<< HEAD
+﻿---
+# Source: n8n/charts/postgresql/templates/primary/networkpolicy.yaml
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: n8n-postgresql
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 18.1.0
+    helm.sh/chart: postgresql-18.2.0
+    app.kubernetes.io/component: primary
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/name: postgresql
+      app.kubernetes.io/component: primary
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - {}
+  ingress:
+    - ports:
+        - port: 5432
+---
+# Source: n8n/charts/redis/templates/networkpolicy.yaml
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: n8n-redis
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.4.0
+    helm.sh/chart: redis-24.1.0
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/name: redis
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - {}
+  ingress:
+    # Allow inbound connections
+    - ports:
+        - port: 6379
+---
+# Source: n8n/charts/postgresql/templates/primary/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: n8n-postgresql
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 18.1.0
+    helm.sh/chart: postgresql-18.2.0
+    app.kubernetes.io/component: primary
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/name: postgresql
+      app.kubernetes.io/component: primary
+---
+# Source: n8n/charts/redis/templates/master/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: n8n-redis-master
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.4.0
+    helm.sh/chart: redis-24.1.0
+    app.kubernetes.io/component: master
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/component: master
+---
+# Source: n8n/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: n8n
+  labels:
+    helm.sh/chart: n8n-1.16.14
+    app.kubernetes.io/name: n8n
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/version: "2.1.4"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: main
+    app.kubernetes.io/part-of: n8n
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: n8n
+      app.kubernetes.io/instance: n8n
+---
+# Source: n8n/charts/postgresql/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: n8n-postgresql
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 18.1.0
+    helm.sh/chart: postgresql-18.2.0
+automountServiceAccountToken: false
+---
+# Source: n8n/charts/redis/templates/master/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+automountServiceAccountToken: false
+metadata:
+  name: n8n-redis-master
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.4.0
+    helm.sh/chart: redis-24.1.0
+---
+# Source: n8n/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: n8n
+  labels:
+    helm.sh/chart: n8n-1.16.14
+    app.kubernetes.io/name: n8n
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/version: "2.1.4"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: main
+    app.kubernetes.io/part-of: n8n
+automountServiceAccountToken: true
+---
+# Source: n8n/charts/postgresql/templates/secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: n8n-postgresql
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 18.1.0
+    helm.sh/chart: postgresql-18.2.0
+type: Opaque
+data:
+  postgres-password: "cG9zdGdyZXM="
+  # We don't auto-generate LDAP password when it's not provided as we do for other passwords
+---
+# Source: n8n/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: n8n-encryption-key-secret-v2
+  namespace: it
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    meta.helm.sh/release-name: n8n
+    meta.helm.sh/release-namespace: it
+type: Opaque
+data:
+  N8N_ENCRYPTION_KEY: "OGVlYzdmNTc0Mzk0ZGNiNTA4NWQ2NDQxNzQ2NDNlNjc="
+---
+# Source: n8n/charts/redis/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-redis-configuration
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.4.0
+    helm.sh/chart: redis-24.1.0
+data:
+  redis.conf: |-
+    # User-supplied common configuration:
+    # Enable ReJSON y Redisearch
+    loadmodule /opt/bitnami/redis/lib/redis/modules/redisearch.so
+    loadmodule /opt/bitnami/redis/lib/redis/modules/rejson.so
+    # Enable AOF https://redis.io/topics/persistence#append-only-file
+    appendonly yes
+    # Disable RDB persistence, AOF persistence already enabled.
+    save ""
+    # End of common configuration
+  master.conf: |-
+    dir /data
+    # User-supplied master configuration:
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    # End of master configuration
+  replica.conf: |-
+    dir /data
+    # User-supplied replica configuration:
+    rename-command FLUSHDB ""
+    rename-command FLUSHALL ""
+    # End of replica configuration
+  users.acl: |-
+---
+# Source: n8n/charts/redis/templates/health-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-redis-health
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.4.0
+    helm.sh/chart: redis-24.1.0
+data:
+  ping_readiness_local.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
+    [[ -n "$REDIS_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h localhost \
+        -p $REDIS_PORT \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_liveness_local.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
+    [[ -n "$REDIS_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h localhost \
+        -p $REDIS_PORT \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
+    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ] && [ "$responseFirstWord" != "MASTERDOWN" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_readiness_master.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_MASTER_PASSWORD_FILE ]] && export REDIS_MASTER_PASSWORD="$(< "${REDIS_MASTER_PASSWORD_FILE}")"
+    [[ -n "$REDIS_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_MASTER_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h $REDIS_MASTER_HOST \
+        -p $REDIS_MASTER_PORT_NUMBER \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    if [ "$response" != "PONG" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_liveness_master.sh: |-
+    #!/bin/bash
+
+    [[ -f $REDIS_MASTER_PASSWORD_FILE ]] && export REDIS_MASTER_PASSWORD="$(< "${REDIS_MASTER_PASSWORD_FILE}")"
+    [[ -n "$REDIS_MASTER_PASSWORD" ]] && export REDISCLI_AUTH="$REDIS_MASTER_PASSWORD"
+    response=$(
+      timeout -s 15 $1 \
+      redis-cli \
+        -h $REDIS_MASTER_HOST \
+        -p $REDIS_MASTER_PORT_NUMBER \
+        ping
+    )
+    if [ "$?" -eq "124" ]; then
+      echo "Timed out"
+      exit 1
+    fi
+    responseFirstWord=$(echo $response | head -n1 | awk '{print $1;}')
+    if [ "$response" != "PONG" ] && [ "$responseFirstWord" != "LOADING" ]; then
+      echo "$response"
+      exit 1
+    fi
+  ping_readiness_local_and_master.sh: |-
+    script_dir="$(dirname "$0")"
+    exit_status=0
+    "$script_dir/ping_readiness_local.sh" $1 || exit_status=$?
+    "$script_dir/ping_readiness_master.sh" $1 || exit_status=$?
+    exit $exit_status
+  ping_liveness_local_and_master.sh: |-
+    script_dir="$(dirname "$0")"
+    exit_status=0
+    "$script_dir/ping_liveness_local.sh" $1 || exit_status=$?
+    "$script_dir/ping_liveness_master.sh" $1 || exit_status=$?
+    exit $exit_status
+---
+# Source: n8n/charts/redis/templates/scripts-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-redis-scripts
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.4.0
+    helm.sh/chart: redis-24.1.0
+data:
+  start-master.sh: |
+    #!/bin/bash
+
+    [[ -f $REDIS_PASSWORD_FILE ]] && export REDIS_PASSWORD="$(< "${REDIS_PASSWORD_FILE}")"
+    if [[ -f /opt/bitnami/redis/mounted-etc/master.conf ]];then
+        cp /opt/bitnami/redis/mounted-etc/master.conf /opt/bitnami/redis/etc/master.conf
+    fi
+    if [[ -f /opt/bitnami/redis/mounted-etc/redis.conf ]];then
+        cp /opt/bitnami/redis/mounted-etc/redis.conf /opt/bitnami/redis/etc/redis.conf
+    fi
+    if [[ -f /opt/bitnami/redis/mounted-etc/users.acl ]];then
+        cp /opt/bitnami/redis/mounted-etc/users.acl /opt/bitnami/redis/etc/users.acl
+    fi
+    ARGS=("--port" "${REDIS_PORT}")
+    ARGS+=("--protected-mode" "no")
+    ARGS+=("--include" "/opt/bitnami/redis/etc/redis.conf")
+    ARGS+=("--include" "/opt/bitnami/redis/etc/master.conf")
+    exec redis-server "${ARGS[@]}"
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-database-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  DB_TYPE: "postgresdb"
+  DB_POSTGRESDB_HOST: n8n-postgresql
+  DB_POSTGRESDB_PORT: "5432"
+  DB_POSTGRESDB_DATABASE: "n8n"
+  DB_POSTGRESDB_POOL_SIZE: "2"
+  DB_POSTGRESDB_CONNECTION_TIMEOUT: "20000"
+  DB_POSTGRESDB_IDLE_CONNECTION_TIMEOUT: "30000"
+  DB_POSTGRESDB_SCHEMA: "public"
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-logging-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  N8N_LOG_LEVEL: "info"
+  N8N_LOG_OUTPUT: "console"
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-diagnostics-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  N8N_DIAGNOSTICS_ENABLED: "false"
+  N8N_DIAGNOSTICS_CONFIG_FRONTEND: ""
+  N8N_DIAGNOSTICS_CONFIG_BACKEND: ""
+  N8N_DIAGNOSTICS_POSTHOG_API_KEY: ""
+  N8N_DIAGNOSTICS_POSTHOG_API_HOST: ""
+  N8N_SENTRY_DSN: ""
+  N8N_FRONTEND_SENTRY_DSN: ""
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-version-notifications-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-public-api-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  N8N_PUBLIC_API_DISABLED: "false"
+  N8N_PUBLIC_API_ENDPOINT: "api"
+  N8N_PUBLIC_API_SWAGGERUI_DISABLED: "false"
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-queue-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  EXECUTIONS_MODE: "queue"
+  QUEUE_BULL_REDIS_DB: "0"
+  OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true"
+  QUEUE_BULL_REDIS_HOST: n8n-redis-master
+  QUEUE_BULL_REDIS_PORT: "6379"
+  N8N_DISABLE_PRODUCTION_MAIN_PROCESS: "true"
+  QUEUE_BULL_REDIS_DUALSTACK: "false"
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-workflow-history-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  N8N_WORKFLOW_HISTORY_ENABLED: "true"
+  N8N_WORKFLOW_HISTORY_PRUNE_TIME: "336"
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-task-broker-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  N8N_RUNNERS_ENABLED: "true"
+  N8N_RUNNERS_MODE: "internal"
+  N8N_RUNNERS_TASK_TIMEOUT: "60"
+  N8N_RUNNERS_HEARTBEAT_INTERVAL: "30"
+  N8N_RUNNERS_MAX_CONCURRENCY: "5"
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-metrics-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  N8N_METRICS: "false"
+  N8N_METRICS_PREFIX: "n8n_"
+  N8N_METRICS_INCLUDE_DEFAULT_METRICS: "true"
+  N8N_METRICS_INCLUDE_CACHE_METRICS: "false"
+  N8N_METRICS_INCLUDE_MESSAGE_EVENT_BUS_METRICS: "false"
+  N8N_METRICS_INCLUDE_WORKFLOW_ID_LABEL: "false"
+  N8N_METRICS_INCLUDE_NODE_TYPE_LABEL: "false"
+  N8N_METRICS_INCLUDE_CREDENTIAL_TYPE_LABEL: "false"
+  N8N_METRICS_INCLUDE_API_ENDPOINTS: "false"
+  N8N_METRICS_INCLUDE_API_PATH_LABEL: "false"
+  N8N_METRICS_INCLUDE_API_METHOD_LABEL: "false"
+  N8N_METRICS_INCLUDE_API_STATUS_CODE_LABEL: "false"
+  N8N_METRICS_INCLUDE_QUEUE_METRICS: "false"
+---
+# Source: n8n/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: n8n-binary-data-configmap
+  labels:
+    app: n8n
+    chart: n8n-1.16.14
+    release: n8n
+    heritage: Helm
+data:
+  N8N_DEFAULT_BINARY_DATA_MODE: "default"
+---
+# Source: n8n/templates/pvc.yaml
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: n8n-main-persistence
+  labels:
+    helm.sh/chart: n8n-1.16.14
+    app.kubernetes.io/name: n8n-main-persistence
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/component: persistence
+    app.kubernetes.io/version: "2.1.4"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: n8n
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+=======
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: n8n-data
+  labels:
+    app: n8n
+spec:
+  storageClassName: it
+>>>>>>> 9abfeee (change)
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+<<<<<<< HEAD
+      storage: 8Gi
+  storageClassName: "it"
+---
+# Source: n8n/charts/postgresql/templates/primary/svc-headless.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-postgresql-hl
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 18.1.0
+    helm.sh/chart: postgresql-18.2.0
+    app.kubernetes.io/component: primary
+  annotations:
+spec:
+  type: ClusterIP
+  clusterIP: None
+  # We want all pods in the StatefulSet to have their addresses published for
+  # the sake of the other Postgresql pods even before they're ready, since they
+  # have to be able to talk to each other in order to become ready.
+  publishNotReadyAddresses: true
+  ports:
+    - name: tcp-postgresql
+      port: 5432
+      targetPort: tcp-postgresql
+  selector:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/component: primary
+---
+# Source: n8n/charts/postgresql/templates/primary/svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-postgresql
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 18.1.0
+    helm.sh/chart: postgresql-18.2.0
+    app.kubernetes.io/component: primary
+spec:
+  type: ClusterIP
+  ports:
+    - name: tcp-postgresql
+      port: 5432
+      targetPort: tcp-postgresql
+      nodePort: null
+  selector:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/component: primary
+---
+# Source: n8n/charts/redis/templates/headless-svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-redis-headless
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.4.0
+    helm.sh/chart: redis-24.1.0
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: tcp-redis
+      port: 6379
+      targetPort: redis
+  selector:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/name: redis
+---
+# Source: n8n/charts/redis/templates/master/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-redis-master
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.4.0
+    helm.sh/chart: redis-24.1.0
+    app.kubernetes.io/component: master
+spec:
+  type: ClusterIP
+  internalTrafficPolicy: Cluster
+  ports:
+    - name: tcp-redis
+      port: 6379
+      targetPort: redis
+      nodePort: null
+  selector:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: master
+---
+# Source: n8n/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n
+  labels:
+    helm.sh/chart: n8n-1.16.14
+    app.kubernetes.io/name: n8n
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/version: "2.1.4"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: main
+    app.kubernetes.io/part-of: n8n
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5678
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: n8n
+    app.kubernetes.io/instance: n8n
+---
+# Source: n8n/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-webhook
+  labels:
+    helm.sh/chart: n8n-1.16.14
+    app.kubernetes.io/name: n8n-webhook
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/component: webhook
+    app.kubernetes.io/version: "2.1.4"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: n8n
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5678
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: n8n-webhook
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/component: webhook
+---
+# Source: n8n/templates/deployment-webhook.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n-webhook
+  labels:
+    helm.sh/chart: n8n-1.16.14
+    app.kubernetes.io/name: n8n-webhook
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/component: webhook
+    app.kubernetes.io/version: "2.1.4"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: n8n
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: n8n-webhook
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/component: webhook
+  template:
+    metadata:
+      annotations:
+        checksum/config: 78eec63bef56994345c5e55f78477b90c65289356118bfbb62093af8aa7c522f
+      labels:
+        helm.sh/chart: n8n-1.16.14
+        app.kubernetes.io/name: n8n-webhook
+        app.kubernetes.io/instance: n8n
+        app.kubernetes.io/component: webhook
+        app.kubernetes.io/version: "2.1.4"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: n8n
+    spec:
+      serviceAccountName: n8n
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: n8n-webhook
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            privileged: false
+            readOnlyRootFilesystem: false
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+          image: "nexus2.ipa.zs:5000/n8nio/n8n:1.78.1"
+          imagePullPolicy: IfNotPresent
+          command: ["n8n"]
+          args: ["webhook"]
+          ports:
+            - name: http
+              containerPort: 5678
+              protocol: TCP
+          startupProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - ps aux | grep '[n]8n'
+            failureThreshold: 30
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /healthz/readiness
+              port: http
+          resources:
+            limits:
+              cpu: "1"
+              memory: 2Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+          env:
+            - name: N8N_HIRING_BANNER_ENABLED
+              value: "false"
+            - name: NODE_ENV
+              value: production
+            - name: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+              value: "true"
+            - name: N8N_PORT
+              value: "5678"
+            - name: N8N_DEFAULT_LOCALE
+              value: "en"
+            - name: GENERIC_TIMEZONE
+              value: "Asia/Shanghai"
+            - name: N8N_GRACEFUL_SHUTDOWN_TIMEOUT
+              value: "30"
+            - name: N8N_DISABLE_UI
+              value: "true"
+            - name: WEBHOOK_URL
+              value: "http://n8n-it.saturn-res.ipa.zs/"
+            - name: DB_POSTGRESDB_USER
+              value: postgres
+            - name: DB_POSTGRESDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-postgresql
+                  key: password
+                  optional: true
+            - name: QUEUE_HEALTH_CHECK_ACTIVE
+              value: "true"
+            - name: QUEUE_BULL_REDIS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-redis
+                  key: redis-username
+                  optional: true
+            - name: QUEUE_BULL_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-redis
+                  key: redis-password
+                  optional: true
+            - name: N8N_RUNNERS_ENABLED
+              value: "true"
+            - name: N8N_RUNNERS_MODE
+              value: internal
+            - name: N8N_RUNNERS_TASK_TIMEOUT
+              value: "60"
+            - name: N8N_RUNNERS_HEARTBEAT_INTERVAL
+              value: "30"
+            - name: N8N_RUNNERS_MAX_CONCURRENCY
+              value: "5"
+            - name: EXECUTIONS_MODE
+              value: "queue"
+            - name: GENERIC_TIMEZONE
+              value: "Asia/Shanghai"
+            - name: N8N_COMMUNITY_PACKAGES_ENABLED
+              value: "false"
+            - name: N8N_HOST
+              value: "n8n-it.saturn-res.ipa.zs"
+            - name: N8N_PROTOCOL
+              value: "http"
+            - name: N8N_PUSH_BACKEND
+              value: "websocket"
+            - name: N8N_TRUST_PROXY
+              value: "true"
+            - name: TZ
+              value: "Asia/Shanghai"
+          envFrom:
+            - configMapRef:
+                name: n8n-database-configmap
+            - configMapRef:
+                name: n8n-logging-configmap
+            - configMapRef:
+                name: n8n-diagnostics-configmap
+            - configMapRef:
+                name: n8n-version-notifications-configmap
+            - configMapRef:
+                name: n8n-public-api-configmap
+            - configMapRef:
+                name: n8n-queue-configmap
+            - secretRef:
+                name: n8n-encryption-key-secret-v2
+---
+# Source: n8n/templates/deployment-worker.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n-worker
+  labels:
+    helm.sh/chart: n8n-1.16.14
+    app.kubernetes.io/name: n8n-worker
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/version: "2.1.4"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: n8n
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: n8n-worker
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      annotations:
+        checksum/config: 78eec63bef56994345c5e55f78477b90c65289356118bfbb62093af8aa7c522f
+      labels:
+        helm.sh/chart: n8n-1.16.14
+        app.kubernetes.io/name: n8n-worker
+        app.kubernetes.io/instance: n8n
+        app.kubernetes.io/component: worker
+        app.kubernetes.io/version: "2.1.4"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: n8n
+    spec:
+      serviceAccountName: n8n
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: n8n-worker
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            privileged: false
+            readOnlyRootFilesystem: false
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+          image: "nexus2.ipa.zs:5000/n8nio/n8n:1.78.1"
+          imagePullPolicy: IfNotPresent
+          command: ["n8n"]
+          args: ["worker", "--concurrency=10"]
+          ports:
+            - name: http
+              containerPort: 5678
+              protocol: TCP
+          startupProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - ps aux | grep '[n]8n'
+            failureThreshold: 30
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /healthz/readiness
+              port: http
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+            requests:
+              cpu: "1"
+              memory: 2Gi
+          env:
+            - name: N8N_HIRING_BANNER_ENABLED
+              value: "false"
+            - name: NODE_ENV
+              value: production
+            - name: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+              value: "true"
+            - name: N8N_PORT
+              value: "5678"
+            - name: N8N_DEFAULT_LOCALE
+              value: "en"
+            - name: GENERIC_TIMEZONE
+              value: "Asia/Shanghai"
+            - name: N8N_GRACEFUL_SHUTDOWN_TIMEOUT
+              value: "30"
+            - name: N8N_DISABLE_UI
+              value: "true"
+            - name: QUEUE_HEALTH_CHECK_ACTIVE
+              value: "true"
+            - name: N8N_CONCURRENCY_PRODUCTION_LIMIT
+              value: "10"
+            - name: DB_POSTGRESDB_USER
+              value: postgres
+            - name: DB_POSTGRESDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-postgresql
+                  key: password
+                  optional: true
+            - name: QUEUE_BULL_REDIS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-redis
+                  key: redis-username
+                  optional: true
+            - name: QUEUE_BULL_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-redis
+                  key: redis-password
+                  optional: true
+            - name: EXECUTIONS_MODE
+              value: "queue"
+            - name: GENERIC_TIMEZONE
+              value: "Asia/Shanghai"
+            - name: N8N_COMMUNITY_PACKAGES_ENABLED
+              value: "false"
+            - name: N8N_HOST
+              value: "n8n-it.saturn-res.ipa.zs"
+            - name: N8N_PROTOCOL
+              value: "http"
+            - name: N8N_PUSH_BACKEND
+              value: "websocket"
+            - name: N8N_TRUST_PROXY
+              value: "true"
+            - name: TZ
+              value: "Asia/Shanghai"
+          envFrom:
+            - configMapRef:
+                name: n8n-database-configmap
+            - configMapRef:
+                name: n8n-logging-configmap
+            - configMapRef:
+                name: n8n-diagnostics-configmap
+            - configMapRef:
+                name: n8n-version-notifications-configmap
+            - configMapRef:
+                name: n8n-public-api-configmap
+            - configMapRef:
+                name: n8n-queue-configmap
+            - configMapRef:
+                name: n8n-task-broker-configmap
+            - configMapRef:
+                name: n8n-metrics-configmap
+            - configMapRef:
+                name: n8n-binary-data-configmap
+            - secretRef:
+                name: n8n-encryption-key-secret-v2
+---
+# Source: n8n/templates/deployment.yaml
+=======
+      storage: 10Gi
+---
+>>>>>>> 9abfeee (change)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  labels:
+<<<<<<< HEAD
+    helm.sh/chart: n8n-1.16.14
+    app.kubernetes.io/name: n8n
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/version: "2.1.4"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: main
+    app.kubernetes.io/part-of: n8n
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: n8n
+      app.kubernetes.io/instance: n8n
+  template:
+    metadata:
+      annotations:
+        checksum/config: 78eec63bef56994345c5e55f78477b90c65289356118bfbb62093af8aa7c522f
+      labels:
+        helm.sh/chart: n8n-1.16.14
+        app.kubernetes.io/name: n8n
+        app.kubernetes.io/instance: n8n
+        app.kubernetes.io/version: "2.1.4"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: main
+        app.kubernetes.io/part-of: n8n
+    spec:
+      serviceAccountName: n8n
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: n8n-main
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            privileged: false
+            readOnlyRootFilesystem: false
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+          image: "nexus2.ipa.zs:5000/n8nio/n8n:1.78.1"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5678
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /healthz/readiness
+              port: http
+          resources:
+            limits:
+              cpu: "4"
+              memory: 4Gi
+            requests:
+              cpu: "2"
+              memory: 2Gi
+          env:
+            - name: N8N_HIRING_BANNER_ENABLED
+              value: "false"
+            - name: NODE_ENV
+              value: production
+            - name: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+              value: "true"
+            - name: N8N_PORT
+              value: "5678"
+            - name: N8N_DEFAULT_LOCALE
+              value: "en"
+            - name: GENERIC_TIMEZONE
+              value: "Asia/Shanghai"
+            - name: N8N_GRACEFUL_SHUTDOWN_TIMEOUT
+              value: "30"
+            - name: N8N_EDITOR_BASE_URL
+              value: "http://n8n-it.saturn-res.ipa.zs"
+            - name: DB_POSTGRESDB_USER
+              value: postgres
+            - name: DB_POSTGRESDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-postgresql
+                  key: password
+                  optional: true
+            - name: QUEUE_BULL_REDIS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-redis
+                  key: redis-username
+                  optional: true
+            - name: QUEUE_BULL_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-redis
+                  key: redis-password
+                  optional: true
+            - name: WEBHOOK_URL
+              value: "http://n8n-it.saturn-res.ipa.zs/"
+            - name: EXECUTIONS_MODE
+              value: "queue"
+            - name: GENERIC_TIMEZONE
+              value: "Asia/Shanghai"
+            - name: N8N_COMMUNITY_PACKAGES_ENABLED
+              value: "false"
+            - name: N8N_HOST
+              value: "n8n-it.saturn-res.ipa.zs"
+            - name: N8N_PROTOCOL
+              value: "http"
+            - name: N8N_PUSH_BACKEND
+              value: "websocket"
+            - name: N8N_TRUST_PROXY
+              value: "true"
+            - name: TZ
+              value: "Asia/Shanghai"
+          envFrom:
+            - configMapRef:
+                name: n8n-database-configmap
+            - configMapRef:
+                name: n8n-logging-configmap
+            - configMapRef:
+                name: n8n-diagnostics-configmap
+            - configMapRef:
+                name: n8n-version-notifications-configmap
+            - configMapRef:
+                name: n8n-public-api-configmap
+            - configMapRef:
+                name: n8n-queue-configmap
+            - configMapRef:
+                name: n8n-workflow-history-configmap
+            - configMapRef:
+                name: n8n-task-broker-configmap
+            - configMapRef:
+                name: n8n-metrics-configmap
+            - configMapRef:
+                name: n8n-binary-data-configmap
+            - secretRef:
+                name: n8n-encryption-key-secret-v2
+          volumeMounts:
+            - name: node-modules
+              mountPath: /home/node/.n8n
+              readOnly: false
+      volumes:
+        - name: node-modules
+          persistentVolumeClaim:
+            claimName: n8n-main-persistence
+---
+# Source: n8n/charts/postgresql/templates/primary/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: n8n-postgresql
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/version: 18.1.0
+    helm.sh/chart: postgresql-18.2.0
+    app.kubernetes.io/component: primary
+spec:
+  replicas: 1
+  serviceName: n8n-postgresql-hl
+  updateStrategy:
+    rollingUpdate: {}
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/name: postgresql
+      app.kubernetes.io/component: primary
+  template:
+    metadata:
+      name: n8n-postgresql
+      labels:
+        app.kubernetes.io/instance: n8n
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: postgresql
+        app.kubernetes.io/version: 18.1.0
+        helm.sh/chart: postgresql-18.2.0
+        app.kubernetes.io/component: primary
+    spec:
+      serviceAccountName: n8n-postgresql
+      
+      automountServiceAccountToken: false
+      affinity:
+        podAffinity:
+          
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/instance: n8n
+                    app.kubernetes.io/name: postgresql
+                    app.kubernetes.io/component: primary
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+        nodeAffinity:
+          
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: Always
+        supplementalGroups: []
+        sysctls: []
+      hostNetwork: false
+      hostIPC: false
+      containers:
+        - name: postgresql
+          image: registry-1.docker.io/bitnamilegacy/postgresql:latest
+          imagePullPolicy: "IfNotPresent"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsGroup: 1001
+            runAsNonRoot: true
+            runAsUser: 1001
+            seLinuxOptions: {}
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: BITNAMI_DEBUG
+              value: "false"
+            - name: POSTGRESQL_PORT_NUMBER
+              value: "5432"
+            - name: POSTGRESQL_VOLUME_DIR
+              value: "/bitnami/postgresql"
+            - name: OPENSSL_FIPS
+              value: "yes"
+            - name: PGDATA
+              value: "/bitnami/postgresql/data"
+            # Authentication
+            - name: POSTGRES_PASSWORD_FILE
+              value: /opt/bitnami/postgresql/secrets/postgres-password
+            - name: POSTGRES_DATABASE
+              value: "n8n"
+            # LDAP
+            - name: POSTGRESQL_ENABLE_LDAP
+              value: "no"
+            # TLS
+            - name: POSTGRESQL_ENABLE_TLS
+              value: "no"
+            # Audit
+            - name: POSTGRESQL_LOG_HOSTNAME
+              value: "false"
+            - name: POSTGRESQL_LOG_CONNECTIONS
+              value: "false"
+            - name: POSTGRESQL_LOG_DISCONNECTIONS
+              value: "false"
+            - name: POSTGRESQL_PGAUDIT_LOG_CATALOG
+              value: "off"
+            # Others
+            - name: POSTGRESQL_CLIENT_MIN_MESSAGES
+              value: "error"
+            - name: POSTGRESQL_SHARED_PRELOAD_LIBRARIES
+              value: "pgaudit"
+          ports:
+            - name: tcp-postgresql
+              containerPort: 5432
+          livenessProbe:
+            failureThreshold: 6
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U "postgres" -d "dbname=n8n" -h 127.0.0.1 -p 5432
+          readinessProbe:
+            failureThreshold: 6
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - -e
+                - |
+                  exec pg_isready -U "postgres" -d "dbname=n8n" -h 127.0.0.1 -p 5432
+                  [ -f /opt/bitnami/postgresql/tmp/.initialized ] || [ -f /bitnami/postgresql/.initialized ]
+          resources:
+            limits:
+              cpu: "2"
+              memory: 4Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+          volumeMounts:
+            - name: empty-dir
+              mountPath: /tmp
+              subPath: tmp-dir
+            - name: empty-dir
+              mountPath: /opt/bitnami/postgresql/conf
+              subPath: app-conf-dir
+            - name: empty-dir
+              mountPath: /opt/bitnami/postgresql/tmp
+              subPath: app-tmp-dir
+            - name: postgresql-password
+              mountPath: /opt/bitnami/postgresql/secrets/
+            - name: dshm
+              mountPath: /dev/shm
+            - name: data
+              mountPath: /bitnami/postgresql
+      volumes:
+        - name: empty-dir
+          emptyDir: {}
+        - name: postgresql-password
+          secret:
+            secretName: n8n-postgresql
+        - name: dshm
+          emptyDir:
+            medium: Memory
+  volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: data
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "20Gi"
+        storageClassName: it
+---
+# Source: n8n/charts/redis/templates/master/application.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: n8n-redis-master
+  namespace: "it"
+  labels:
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/version: 8.4.0
+    helm.sh/chart: redis-24.1.0
+    app.kubernetes.io/component: master
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: n8n
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/component: master
+  serviceName: n8n-redis-headless
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: n8n
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/version: 8.4.0
+        helm.sh/chart: redis-24.1.0
+        app.kubernetes.io/component: master
+      annotations:
+        checksum/configmap: 95944ee35a19af37cefd156f19d93e157e578c1dc63ac01ce735ae93090b7580
+        checksum/health: aff24913d801436ea469d8d374b2ddb3ec4c43ee7ab24663d5f8ff1a1b6991a9
+        checksum/scripts: bdec350b84a1ace7cc118db113a21c9f160bde3425b07714e1c0c1da722621cf
+        checksum/secret: 44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+    spec:
+      
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: Always
+        supplementalGroups: []
+        sysctls: []
+      serviceAccountName: n8n-redis-master
+      automountServiceAccountToken: false
+      affinity:
+        podAffinity:
+          
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/instance: n8n
+                    app.kubernetes.io/name: redis
+                    app.kubernetes.io/component: master
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+        nodeAffinity:
+          
+      enableServiceLinks: true
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: redis
+          image: registry-1.docker.io/bitnamilegacy/redis:latest
+          imagePullPolicy: "IfNotPresent"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 1001
+            runAsNonRoot: true
+            runAsUser: 1001
+            seLinuxOptions: {}
+            seccompProfile:
+              type: RuntimeDefault
+          command:
+            - /bin/bash
+          args:
+            - -ec
+            - /opt/bitnami/scripts/start-scripts/start-master.sh
+          env:
+            - name: BITNAMI_DEBUG
+              value: "false"
+            - name: REDIS_REPLICATION_MODE
+              value: master
+            - name: ALLOW_EMPTY_PASSWORD
+              value: "yes"
+            - name: OPENSSL_FIPS
+              value: "yes"
+            - name: REDIS_TLS_ENABLED
+              value: "no"
+            - name: REDIS_PORT
+              value: "6379"
+          ports:
+            - name: redis
+              containerPort: 6379
+          livenessProbe:
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            # One second longer than command timeout should prevent generation of zombie processes.
+            timeoutSeconds: 6
+            successThreshold: 1
+            failureThreshold: 5
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - "/health/ping_liveness_local.sh 5"
+          readinessProbe:
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 5
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - "/health/ping_readiness_local.sh 1"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: 200m
+              memory: 512Mi
+          volumeMounts:
+            - name: start-scripts
+              mountPath: /opt/bitnami/scripts/start-scripts
+            - name: health
+              mountPath: /health
+            - name: redis-data
+              mountPath: /data
+            - name: config
+              mountPath: /opt/bitnami/redis/mounted-etc
+            - name: empty-dir
+              mountPath: /opt/bitnami/redis/etc/
+              subPath: app-conf-dir
+            - name: empty-dir
+              mountPath: /tmp
+              subPath: tmp-dir
+      volumes:
+        - name: start-scripts
+          configMap:
+            name: n8n-redis-scripts
+            defaultMode: 0755
+        - name: health
+          configMap:
+            name: n8n-redis-health
+            defaultMode: 0755
+        - name: config
+          configMap:
+            name: n8n-redis-configuration
+        - name: empty-dir
+          emptyDir: {}
+  volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: redis-data
+        labels:
+          app.kubernetes.io/instance: n8n
+          app.kubernetes.io/name: redis
+          app.kubernetes.io/component: master
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "4Gi"
+        storageClassName: it
+---
+# Source: n8n/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: n8n
+  labels:
+    helm.sh/chart: n8n-1.16.14
+    app.kubernetes.io/name: n8n
+    app.kubernetes.io/instance: n8n
+    app.kubernetes.io/version: "2.1.4"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: main
+    app.kubernetes.io/part-of: n8n
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: "n8n-it.saturn-res.ipa.zs"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n
+                port:
+                  number: 5678
+          - path: /webhook/
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n-webhook
+                port:
+                  number: 5678
+          - path: /webhook-test/
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n
+                port:
+                  number: 5678
+          - path: /form/
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n-webhook
+                port:
+                  number: 5678
+          - path: /form-test/
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n
+                port:
+                  number: 5678
+          - path: /mcp/
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n-webhook
+                port:
+                  number: 5678
+          - path: /mcp-test/
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n
+                port:
+                  number: 5678
+          - path: /rest/oauth2-credential/callback
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n
+                port:
+                  number: 5678
+          - path: /static/
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n
+                port:
+                  number: 5678
+          - path: /webhook-waiting/
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n-webhook
+                port:
+                  number: 5678
+          - path: /form-waiting/
+            pathType: Prefix
+            backend:
+              service:
+                name: n8n-webhook
+                port:
+                  number: 5678
+=======
+    app: n8n
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: n8n
+          image: docker.n8n.io/n8nio/n8n:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5678
+          env:
+            - name: TZ
+              value: Asia/Shanghai
+            - name: N8N_DIAGNOSTICS_ENABLED
+              value: "false"
+            - name: N8N_PERSONALIZATION_ENABLED
+              value: "false"
+            - name: N8N_HOST
+              value: "172.24.24.23"
+            - name: N8N_PORT
+              value: "5678"
+            - name: N8N_PROTOCOL
+              value: http
+            - name: N8N_SECURE_COOKIE
+              value: "false"
+            - name: N8N_EDITOR_BASE_URL
+              value: "http://172.24.24.23:31209"
+            - name: WEBHOOK_URL
+              value: "http://172.24.24.23:31209/"
+            - name: N8N_PUSH_BACKEND
+              value: "sse"
+          volumeMounts:
+            - name: n8n-data
+              mountPath: /home/node/.n8n
+          readinessProbe:
+            tcpSocket:
+              port: 5678
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: 5678
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 1
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+      volumes:
+        - name: n8n-data
+          persistentVolumeClaim:
+            claimName: n8n-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n
+  labels:
+    app: n8n
+spec:
+  selector:
+    app: n8n
+  type: NodePort
+  ports:
+    - name: http
+      port: 5678
+      targetPort: 5678
+      nodePort: 31209
+>>>>>>> 9abfeee (change)

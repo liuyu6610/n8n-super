@@ -1,0 +1,263 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "httpMethod": [
+          "POST"
+        ],
+        "path": "n9e-alert",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "07ba976d-5fa6-4b81-9226-8b870c04d50c",
+      "name": "Webhook",
+      "webhookId": "56e37bce-c909-4ca1-9d7b-0f934fae0505",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// N9E Webhook 在 n8n 里通常是 { headers, params, query, body }\n// 真实告警事件一般在 body.event\nconst inputJson = $input.first().json;\nconst payload = inputJson?.body ?? inputJson;\nconst e = payload?.event ?? payload;\n\nconst getStr = (v, d = '') => (v === undefined || v === null) ? d : String(v);\nconst getNum = (v, d = 0) => {\n  if (v === undefined || v === null || v === '') return d;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : d;\n};\nconst getBool = (v, d = false) => {\n  if (v === true || v === false) return v;\n  if (v === undefined || v === null || v === '') return d;\n  const s = String(v).trim().toLowerCase();\n  if (s === '1' || s === 'true' || s === 'yes' || s === 'y') return true;\n  if (s === '0' || s === 'false' || s === 'no' || s === 'n') return false;\n  const n = Number(v);\n  if (Number.isFinite(n)) return n !== 0;\n  return d;\n};\n\nconst tagsMap = (e && typeof e.tags_map === 'object' && e.tags_map !== null) ? e.tags_map : {};\n\n// rule / severity\nconst ruleName = getStr(e?.rule_name, getStr(tagsMap.rulename, 'unknown_rule'));\nconst ruleId = getStr(e?.rule_id, '');\nconst groupId = getStr(e?.group_id, '');\nconst groupName = getStr(e?.group_name, '');\n\nconst severityRaw = e?.severity;\nconst severityNum = (typeof severityRaw === 'number' || (typeof severityRaw === 'string' && severityRaw.trim() !== ''))\n  ? getNum(severityRaw, -1)\n  : -1;\n\n// 兼容：既可能是数字（如 1/2/3），也可能是字符串（critical/warn/info）\nconst severity = (() => {\n  const s = getStr(severityRaw, '').trim();\n  if (s === '') return '';\n  if (Number.isFinite(severityNum) && severityNum >= 0) return String(severityNum);\n  return s.toLowerCase();\n})();\n\n// target_ident：优先用事件字段，其次从 tags_map 推断\nconst targetIdent = (() => {\n  const direct = getStr(e?.target_ident, '').trim();\n  if (direct) return direct;\n\n  const candidates = [\n    tagsMap.instance,\n    tagsMap.nodename,\n    tagsMap.node,\n    tagsMap.host,\n    tagsMap.hostname,\n    tagsMap.pod,\n    tagsMap.pod_name,\n    tagsMap.service,\n    tagsMap.namespace,\n    tagsMap.job,\n    tagsMap.container,\n    tagsMap.endpoint,\n  ].map(v => getStr(v, '').trim()).filter(Boolean);\n\n  return candidates[0] ?? 'unknown_target';\n})();\n\n// entity_id：用于同一 rule 下区分不同实例（避免互相覆盖）\n// k8s 优先 namespace/pod/container，其次 instance/nodename/host\nconst entityId = (() => {\n  const ns = getStr(tagsMap.namespace, '').trim();\n  const pod = getStr(tagsMap.pod, getStr(tagsMap.pod_name, '')).trim();\n  const container = getStr(tagsMap.container, '').trim();\n\n  if (ns && pod && container) return `${ns}/${pod}/${container}`;\n  if (ns && pod) return `${ns}/${pod}`;\n\n  const inst = getStr(tagsMap.instance, '').trim();\n  if (inst) return inst;\n\n  const node = getStr(tagsMap.nodename, getStr(tagsMap.node, '')).trim();\n  if (node) return node;\n\n  const host = getStr(tagsMap.host, getStr(tagsMap.hostname, '')).trim();\n  if (host) return host;\n\n  return 'unknown_entity';\n})();\n\n// 恢复判定：N9E 的字段可能是 notify_recovered(0/1) 或 is_recovered(true/false)\nconst isRecovered = (() => {\n  if (e && Object.prototype.hasOwnProperty.call(e, 'is_recovered')) return getBool(e.is_recovered, false);\n  if (e && Object.prototype.hasOwnProperty.call(e, 'notify_recovered')) return getBool(e.notify_recovered, false);\n  return false;\n})();\n\nconst triggerTime = getNum(e?.trigger_time, 0);\nconst triggerValue = getStr(e?.trigger_value, getStr(e?.trigger_value_str, '')).trim();\n\n// alert_key：稳定且唯一（避免 unknown 互相覆盖）\nconst alertKey = (() => {\n  const rid = getStr(e?.rule_id, '').trim();\n  const hash = getStr(e?.hash, '').trim();\n  if (rid && hash) return `${rid}%7C${hash}`;\n  if (rid) return `${rid}%7C${encodeURIComponent(entityId)}`;\n  return `${encodeURIComponent(ruleName)}%7C${encodeURIComponent(entityId)}`;\n})();\n\nreturn [{\n  json: {\n    alert_key: alertKey,\n    rule_id: ruleId,\n    rule_name: ruleName,\n    group_id: groupId,\n    group_name: groupName,\n    severity,\n    target_ident: targetIdent,\n    entity_id: entityId,\n    trigger_time: triggerTime,\n    trigger_value: triggerValue,\n    is_recovered: isRecovered,\n    raw: e,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "645874cf-3e95-407f-addc-0f1a22da296b",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c75e0ae7-464c-41c3-b990-6b3d45561b6b",
+              "leftValue": "{{$json.is_recovered}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "f51cd993-bfda-449f-9706-4e19390b0736",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\n\nif (!row.alert_key) {\n  return [{ json: { ok: false, error: 'missing alert_key' } }];\n}\n\nconst staticData = $getWorkflowStaticData('global');\nstaticData.alert_table = staticData.alert_table ?? {};\n\nstaticData.alert_table[row.alert_key] = {\n  ...row,\n  updated_at: Math.floor(Date.now() / 1000),\n};\n\nreturn [{ json: { ok: true, action: 'upsert', alert_key: row.alert_key } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        96
+      ],
+      "id": "0b1d13ff-229c-4699-b953-26d8933eeca9",
+      "name": "Store Upsert"
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\n\nif (!row.alert_key) {\n  return [{ json: { ok: false, error: 'missing alert_key' } }];\n}\n\nconst staticData = $getWorkflowStaticData('global');\nstaticData.alert_table = staticData.alert_table ?? {};\n\ndelete staticData.alert_table[row.alert_key];\n\nreturn [{ json: { ok: true, action: 'delete', alert_key: row.alert_key } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        -96
+      ],
+      "id": "2ee2eb77-0686-494d-84a5-1e1d3a2d39e8",
+      "name": "Store Delete"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"message\":\"Workflow was started\"}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        832,
+        0
+      ],
+      "id": "0fb1c0d8-2d2f-4f35-9a2d-6cbd8d7e9dc8",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 30 17 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        208
+      ],
+      "id": "d02b1f5f-37a2-4fd7-bd32-c194a63c363f",
+      "name": "Schedule Trigger",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst table = staticData.alert_table ?? {};\nconst rows = Object.values(table);\n\nrows.sort((a, b) => (Number(b.trigger_time) || 0) - (Number(a.trigger_time) || 0));\n\nconst day = new Date().toISOString().slice(0, 10);\nconst count = rows.length;\n\nconst header = ['rule_name','severity','target_ident','trigger_time','trigger_value'].join(',');\nconst lines = rows.map(r => {\n  const t = r.trigger_time ? new Date(Number(r.trigger_time) * 1000).toISOString().replace('T',' ').replace('Z','') : '';\n  const cols = [\n    String(r.rule_name ?? '').replaceAll(',', ' '),\n    String(r.severity ?? '').replaceAll(',', ' '),\n    String(r.target_ident ?? '').replaceAll(',', ' '),\n    String(t).replaceAll(',', ' '),\n    String(r.trigger_value ?? '').replaceAll(',', ' ')\n  ];\n  return cols.join(',');\n});\nconst csv = [header, ...lines].join('\\n');\n\nlet md = `# N9E 当前告警日报（${day} 17:30）\\n\\n`;\nmd += `- 当前仍在告警：**${count}** 条\\n\\n`;\nif (count === 0) {\n  md += `> 当前无告警。\\n`;\n} else {\n  md += `## 明细（CSV）\\n\\n`;\n  md += '```csv\\n' + csv + '\\n```';\n}\n\nreturn [{ json: { title: `N9E当前告警日报-${day}`, markdown: md } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        208
+      ],
+      "id": "905ae51b-397e-473c-b161-8b73681cbf31",
+      "name": "Build Daily Report"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://oapi.dingtalk.com/robot/send?access_token=__DINGTALK_ACCESS_TOKEN__",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ msgtype: 'markdown', markdown: { title: $json.title, text: $json.markdown } }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        624,
+        288
+      ],
+      "id": "f9c89305-9673-48e5-abfc-a98cb9b8e285",
+      "name": "HTTP Request"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Store Delete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Store Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Delete": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Upsert": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Daily Report": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "cf142503-a0be-4817-ac75-ee5518785406",
+  "meta": {
+    "instanceId": "228d3260ba8cfb81d7ec66eeeb9779350edd748ef6d5db89adde26f037cd25ef"
+  },
+  "id": "XKv9WqPhTUP3Ptno",
+  "tags": []
+}

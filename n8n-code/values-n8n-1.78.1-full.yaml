@@ -1,0 +1,168 @@
+image:
+  repository: nexus2.ipa.zs:5000/n8nio/n8n
+  tag: "1.78.1"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 5678
+
+log:
+  level: info
+  output:
+    - console
+
+timezone: "Asia/Shanghai"
+
+extraEnvVars:
+  TZ: "Asia/Shanghai"
+  GENERIC_TIMEZONE: "Asia/Shanghai"
+  N8N_TRUST_PROXY: "true"
+  N8N_PROTOCOL: "http"
+  N8N_HOST: "n8n-it.saturn-res.ipa.zs"
+  N8N_PUSH_BACKEND: "websocket"
+  N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+  EXECUTIONS_MODE: "queue"
+
+# 1.78.x 时代建议关闭遥测/个性化/版本通知，避免离线环境卡顿/超时
+# 注意：这些开关在不同大版本命名可能变化，但对新 chart 一般仍然兼容
+# 若你发现某个变量不生效，可再按容器日志微调
+
+diagnostics:
+  enabled: false
+
+versionNotifications:
+  enabled: false
+
+# n8n 数据库：改为 Postgres（避免 SQLite 历史数据/迁移问题）
+db:
+  type: postgresdb
+  postgresdb:
+    schema: public
+    ssl:
+      enabled: false
+
+# 主节点
+main:
+  count: 1
+  editorBaseUrl: "http://n8n-it.saturn-res.ipa.zs"
+  resources:
+    requests:
+      cpu: "2"
+      memory: 2Gi
+    limits:
+      cpu: "4"
+      memory: 4Gi
+
+  # n8n 主数据目录（含加密配置、工作流等）。使用 it 这个 storageClass。
+  persistence:
+    enabled: true
+    storageClass: it
+    accessMode: ReadWriteOnce
+    size: 8Gi
+    annotations: {}
+
+worker:
+  mode: queue
+  count: 1
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+
+webhook:
+  mode: queue
+  count: 1
+  url: "http://n8n-it.saturn-res.ipa.zs/"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+# Ingress
+# 你的截图里域名就是 n8n-it.saturn-res.ipa.zs
+# 如果你走 https，把 N8N_PROTOCOL / editorBaseUrl / webhook.url 一并改成 https
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+  hosts:
+    - host: n8n-it.saturn-res.ipa.zs
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Redis（Bitnami）
+# 队列模式必须启用 Redis
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    password: "redis"
+  master:
+    service:
+      ports:
+        redis: 6379
+    resources:
+      requests:
+        cpu: "200m"
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    persistence:
+      enabled: true
+      storageClass: it
+      size: 4Gi
+
+# PostgreSQL（Bitnami）
+postgresql:
+  enabled: true
+  architecture: standalone
+  auth:
+    username: ""
+    password: postgres
+    database: n8n
+  primary:
+    service:
+      ports:
+        postgresql: 5432
+    resources:
+      requests:
+        cpu: "500m"
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
+    persistence:
+      enabled: true
+      storageClass: it
+      size: 20Gi
+
+# 不启用外部 Postgres/Redis（需要外部时再切换 externalPostgresql/externalRedis）
+externalRedis:
+  host: ""
+
+externalPostgresql:
+  host: ""

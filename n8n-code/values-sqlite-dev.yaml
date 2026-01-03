@@ -1,0 +1,21 @@
+service:
+  type: NodePort
+  nodePort: 31209
+
+ingress:
+  enabled: false
+
+# SQLite 仅适用于开发/测试；生产建议 PostgreSQL
+
+db:
+  type: sqlite
+
+# 离线环境建议关闭诊断/个性化，减少外联报错
+
+n8n:
+  extraEnv:
+    TZ: Asia/Shanghai
+    N8N_PROTOCOL: http
+    N8N_SECURE_COOKIE: "false"
+    N8N_DIAGNOSTICS_ENABLED: "false"
+    N8N_PERSONALIZATION_ENABLED: "false"

@@ -20,6 +20,8 @@ FROM n8nio/n8n:1.78.1
 # 切到 root：安装系统依赖、写入 /usr/local/bin、创建 venv 等需要 root 权限
 USER root
 
+ENV PUPPETEER_SKIP_DOWNLOAD=false
+
 # python3 wrapper：
 # - 构建时复制到 /usr/local/bin
 # - 后续会把 venv 里的 python3 替换为该 wrapper（并把真实解释器重命名为 python3-real）
@@ -28,6 +30,9 @@ COPY n8n-python3-wrapper.sh /usr/local/bin/n8n-python3-wrapper.sh
 
 # Team default python requirements (preinstall at build time)
 COPY config/requirements.txt /opt/n8n-super-requirements.txt
+
+# Team default community nodes list
+COPY config/community-nodes.list /opt/n8n-super-community-nodes.list
 
 # Install system tooling
 #
@@ -40,16 +45,31 @@ COPY config/requirements.txt /opt/n8n-super-requirements.txt
 # - python3/python3-venv/python3-pip 或 py3-virtualenv：用于 PythonFunction
 #
 # 注意：
-# - Alpine 下 python3 -m venv 有时依赖包不齐或行为差异，使用 py3-virtualenv 更稳
+# - 这里用空格分隔多个 npm 包名（npm install 支持）
+# - 强烈建议固定版本，避免拉取 latest 导致不可复现
 RUN set -eux; \
   if command -v apt-get >/dev/null 2>&1; then \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       bash \
       ca-certificates \
+      chromium \
       curl \
+      fonts-liberation \
       git \
       jq \
+      libasound2 \
+      libatk-bridge2.0-0 \
+      libatk1.0-0 \
+      libdrm2 \
+      libgbm1 \
+      libgtk-3-0 \
+      libnss3 \
+      libx11-xcb1 \
+      libxcomposite1 \
+      libxdamage1 \
+      libxkbcommon0 \
+      libxrandr2 \
       openssh-client \
       python3 \
       python3-venv \
@@ -64,18 +84,24 @@ RUN set -eux; \
     apk add --no-cache \
       bash \
       ca-certificates \
+      chromium \
       curl \
+      freetype \
       git \
+      harfbuzz \
       jq \
+      nss \
       openssh-client \
       python3 \
       py3-pip \
       py3-virtualenv \
       rsync \
       tar \
+      ttf-freefont \
       unzip \
       wget \
     ; \
+    if [ -x /usr/bin/chromium-browser ] && [ ! -x /usr/bin/chromium ]; then ln -s /usr/bin/chromium-browser /usr/bin/chromium; fi; \
   else \
     echo "Unsupported base image: missing apt-get/apk" >&2; \
     exit 1; \
@@ -161,17 +187,29 @@ RUN set -eux; \
 # 注意：
 # - 这里用空格分隔多个 npm 包名（npm install 支持）
 # - 强烈建议固定版本，避免拉取 latest 导致不可复现
-ARG COMMUNITY_NODES="n8n-nodes-python n8n-nodes-dingtalk n8n-nodes-extended-gitlab n8n-nodes-jenkins n8n-nodes-kubernetes n8n-nodes-helm-chart n8n-nodes-ntfy@0.1.7 n8n-nodes-browser@0.2.2"
-RUN set -eux; \
+ARG COMMUNITY_NODES=""
+ RUN set -eux; \
   npm config set fund false; \
   npm config set audit false; \
   npm config set update-notifier false; \
   mkdir -p /home/node/.n8n/nodes; \
   cd /home/node/.n8n/nodes; \
   if [ ! -f package.json ]; then npm init -y; fi; \
-  npm install --no-fund --no-audit --omit=dev ${COMMUNITY_NODES}; \
+  nodes_to_install="${COMMUNITY_NODES}"; \
+  if [ -z "${nodes_to_install}" ] && [ -f /opt/n8n-super-community-nodes.list ]; then \
+    nodes_to_install="$(grep -vE '^\s*(#|$)' /opt/n8n-super-community-nodes.list | tr -d '\r' | tr '\n' ' ')"; \
+  fi; \
+  npm install --no-fund --no-audit --omit=dev ${nodes_to_install}; \
+  # Build-time verification: ensure key community nodes are present and loadable.
+  # If any of these fails, the image build should fail fast.
+  node -e "const base='/home/node/.n8n/nodes/node_modules'; const checks=[['n8n-nodes-browser', base + '/n8n-nodes-browser/dist/nodes/Browser/Browser.node.js', 'Browser'],['n8n-nodes-dingtalk', base + '/n8n-nodes-dingtalk/dist/nodes/DingTalk/DingTalk.node.js', 'DingTalk'],['n8n-nodes-extended-gitlab', base + '/n8n-nodes-extended-gitlab/dist/nodes/GitlabExtended/GitlabExtended.node.js', 'GitlabExtended'],['n8n-nodes-helm-chart', base + '/n8n-nodes-helm-chart/dist/nodes/HelmChart/HelmChart.node.js', 'HelmChart'],['n8n-nodes-ntfy', base + '/n8n-nodes-ntfy/dist/nodes/Ntfy/Ntfy.node.js', 'Ntfy'],['n8n-nodes-kubernetes', base + '/n8n-nodes-kubernetes/dist/nodes/Docker/Docker.node.js', 'Docker']]; let failed=false; for (const c of checks){ const pkg=c[0], file=c[1], key=c[2]; try{ const mod=require(file); const C=mod && mod[key]; if (typeof C!=='function') throw new Error('missing export '+key); const inst=new C(); const name=inst && inst.description && inst.description.name; if (!name) throw new Error('missing instance.description.name'); console.log('[n8n-super] verify ok: '+pkg+' -> '+name); } catch(e){ failed=true; console.error('[n8n-super] verify failed: '+pkg+' ('+file+'): '+e.message); } } if (failed) process.exit(1);"; \
+  rm -rf /opt/n8n-super-prebuilt-nodes; \
+  mkdir -p /opt/n8n-super-prebuilt-nodes; \
+  cp -a /home/node/.n8n/nodes/package.json /opt/n8n-super-prebuilt-nodes/; \
+  if [ -f /home/node/.n8n/nodes/package-lock.json ]; then cp -a /home/node/.n8n/nodes/package-lock.json /opt/n8n-super-prebuilt-nodes/; fi; \
+  cp -a /home/node/.n8n/nodes/node_modules /opt/n8n-super-prebuilt-nodes/; \
   mkdir -p /home/node/.n8n/custom; \
-  chown -R node:node /home/node/.n8n
+  chown -R node:node /home/node/.n8n /opt/n8n-super-prebuilt-nodes
 
 # Ensure the venv python is preferred at runtime
 #

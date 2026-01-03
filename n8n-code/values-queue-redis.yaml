@@ -1,0 +1,35 @@
+service:
+  type: NodePort
+  nodePort: 31209
+
+ingress:
+  enabled: false
+
+db:
+  type: postgresdb
+
+postgresql:
+  enabled: true
+  auth:
+    database: n8n
+    username: n8n
+    password: "CHANGE_ME"
+
+redis:
+  enabled: true
+
+worker:
+  mode: queue
+
+webhook:
+  mode: queue
+  # NodePort 场景下 webhook.url 建议显式设置为你的访问地址（否则回调可能异常）
+  # url: "http://<node-ip>:31209"
+
+n8n:
+  extraEnv:
+    TZ: Asia/Shanghai
+    N8N_PROTOCOL: http
+    N8N_SECURE_COOKIE: "false"
+    N8N_DIAGNOSTICS_ENABLED: "false"
+    N8N_PERSONALIZATION_ENABLED: "false"
