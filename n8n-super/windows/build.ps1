@@ -4,7 +4,7 @@
 #
 # 用法：
 #   .\windows\build.ps1
-#   .\windows\build.ps1 -Tag "n8n-super:1.78.1"
+#   .\windows\build.ps1 -Tag "n8n-super:1.78.1-r1"
 param(
   [string]$Tag = "n8n-super:1.78.1",
   [string]$CommunityNodes = "",
@@ -15,26 +15,24 @@ param(
   [string]$PipDefaultTimeout = ""
 )
 
-# 使用仓库根目录作为 build context
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
+$BuildEnvFile = Join-Path $RootDir "config\build.env"
+$BuildEnv = @{}
+
+if (Test-Path $BuildEnvFile) {
+  Get-Content $BuildEnvFile | ForEach-Object {
+    $line = $_.Trim()
+    if (-not $line) { return }
+    if ($line.StartsWith('#')) { return }
+    $idx = $line.IndexOf('=')
+    if ($idx -lt 1) { return }
+    $k = $line.Substring(0, $idx).Trim()
+    $v = $line.Substring($idx + 1).Trim()
+    if ($k) { $BuildEnv[$k] = $v }
+  }
+}
 
 $buildArgs = @()
-
-if ($CommunityNodes) {
-  $buildArgs += "--build-arg"
-  $buildArgs += "COMMUNITY_NODES=$CommunityNodes"
-} elseif ($env:COMMUNITY_NODES) {
-  $buildArgs += "--build-arg"
-  $buildArgs += "COMMUNITY_NODES=$($env:COMMUNITY_NODES)"
-}
-
-if ($ArgoCdVersion) {
-  $buildArgs += "--build-arg"
-  $buildArgs += "ARGOCD_VERSION=$ArgoCdVersion"
-} elseif ($env:ARGOCD_VERSION) {
-  $buildArgs += "--build-arg"
-  $buildArgs += "ARGOCD_VERSION=$($env:ARGOCD_VERSION)"
-}
 
 function Add-BuildArgIfPresent {
   param(
@@ -56,7 +54,35 @@ function Add-BuildArgIfPresent {
   if ($envValue) {
     $buildArgs += "--build-arg"
     $buildArgs += "$Name=$envValue"
+    return
   }
+
+  if ($BuildEnv.ContainsKey($Name) -and $BuildEnv[$Name]) {
+    $buildArgs += "--build-arg"
+    $buildArgs += "$Name=$($BuildEnv[$Name])"
+  }
+}
+
+if ($CommunityNodes) {
+  $buildArgs += "--build-arg"
+  $buildArgs += "COMMUNITY_NODES=$CommunityNodes"
+} elseif ($env:COMMUNITY_NODES) {
+  $buildArgs += "--build-arg"
+  $buildArgs += "COMMUNITY_NODES=$($env:COMMUNITY_NODES)"
+} elseif ($BuildEnv.ContainsKey('COMMUNITY_NODES') -and $BuildEnv['COMMUNITY_NODES']) {
+  $buildArgs += "--build-arg"
+  $buildArgs += "COMMUNITY_NODES=$($BuildEnv['COMMUNITY_NODES'])"
+}
+
+if ($ArgoCdVersion) {
+  $buildArgs += "--build-arg"
+  $buildArgs += "ARGOCD_VERSION=$ArgoCdVersion"
+} elseif ($env:ARGOCD_VERSION) {
+  $buildArgs += "--build-arg"
+  $buildArgs += "ARGOCD_VERSION=$($env:ARGOCD_VERSION)"
+} elseif ($BuildEnv.ContainsKey('ARGOCD_VERSION') -and $BuildEnv['ARGOCD_VERSION']) {
+  $buildArgs += "--build-arg"
+  $buildArgs += "ARGOCD_VERSION=$($BuildEnv['ARGOCD_VERSION'])"
 }
 
 Add-BuildArgIfPresent -Name "PIP_INDEX_URL" -Value $PipIndexUrl -EnvName1 "PIP_INDEX_URL" -EnvName2 "N8N_PIP_INDEX_URL"

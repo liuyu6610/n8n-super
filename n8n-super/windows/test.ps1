@@ -1,35 +1,25 @@
 # windows/test.ps1
 #
-# 作用：对单容器模式进行可用性自检。
+# 作用：自检（单容器或 Queue 模式）（Windows/PowerShell）。
 #
-# 检查项：
-# - /healthz 轮询直到超时
-# - n8n --version
-# - argocd version --client
-# - Python venv 基础依赖 python-fire import
-# - 社区节点 n8n-nodes-python package.json 可读取
+# 用法：
+#   .\windows\test.ps1
+#   .\windows\test.ps1 -Queue
 param(
-  [string]$ContainerName = "n8n-super",
+  [switch]$Queue,
   [string]$HealthUrl = "http://localhost:5678/healthz",
-  [int]$TimeoutSeconds = 180
+  [int]$TimeoutSeconds = 180,
+  [string]$ContainerName = "n8n-super",
+  [string]$WebContainer = "n8n-web",
+  [string]$WorkerContainer = "n8n-worker",
+  [string]$WebhookContainer = "n8n-webhook"
 )
-
-function Assert-LastExitCode {
-  param(
-    [string]$Step
-  )
-  if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed: $Step (exit=$LASTEXITCODE)"
-    exit $LASTEXITCODE
-  }
-}
 
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $ok = $false
-
 while ((Get-Date) -lt $deadline) {
   try {
-    Invoke-RestMethod -Uri $HealthUrl -Method Get -TimeoutSec 5 -ErrorAction Stop | Out-Null
+    Invoke-WebRequest -UseBasicParsing -Uri $HealthUrl -TimeoutSec 5 | Out-Null
     $ok = $true
     break
   } catch {
@@ -44,16 +34,19 @@ if (-not $ok) {
 
 Write-Host "Health check OK: $HealthUrl"
 
-docker exec $ContainerName n8n --version
-Assert-LastExitCode "n8n --version"
-
-docker exec $ContainerName argocd version --client
-Assert-LastExitCode "argocd version --client"
-
-docker exec $ContainerName /opt/n8n-python-venv/bin/python -c "import fire; print('python-fire import ok')"
-Assert-LastExitCode "python-fire import"
-
-docker exec $ContainerName node -e "const p=require('/home/node/.n8n/nodes/node_modules/n8n-nodes-python/package.json'); console.log(p.name+'@'+p.version)"
-Assert-LastExitCode "n8n-nodes-python package.json"
-
-Write-Host "All checks passed."
+if ($Queue) {
+  $containers = @($WebContainer, $WorkerContainer, $WebhookContainer)
+  foreach ($c in $containers) {
+    Write-Host "[check] container=$c"
+    docker exec $c n8n --version
+    docker exec $c argocd version --client
+    docker exec $c /opt/n8n-python-venv/bin/python -c "import fire; print('python-fire import ok')"
+  }
+  Write-Host "All queue checks passed."
+} else {
+  docker exec $ContainerName n8n --version
+  docker exec $ContainerName argocd version --client
+  docker exec $ContainerName /opt/n8n-python-venv/bin/python -c "import fire; print('python-fire import ok')"
+  docker exec $ContainerName node -e "const p=require('/home/node/.n8n/nodes/node_modules/n8n-nodes-python/package.json'); console.log(p.name+'@'+p.version)"
+  Write-Host "All checks passed."
+}

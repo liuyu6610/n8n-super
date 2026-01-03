@@ -72,7 +72,6 @@
 - `n8n-python3-wrapper.sh`：venv 内 `python3` wrapper（运行时按依赖 hash 创建/复用独立 venv）
 - `config/`
   - `config/n8n-super.env`：启动配置注入文件（pip 源、自动装包开关、缓存目录等）
-  - `config/n8n-super.env.example`：示例
   - `config/requirements.txt`：Python 依赖示例（可替换为你的依赖集合）
 - `scripts/`
   - `scripts/*.sh`：Linux/macOS 真实实现脚本
@@ -311,9 +310,7 @@ environment:
 
 由于容器级环境变量（如 pip 源、自动装包开关）通常不适合在 n8n UI 里直接修改，本项目支持在启动时加载一个配置文件，将所有“可自定义项”集中管理。
 
-1) 复制示例文件：`config/n8n-super.env.example` -> `config/n8n-super.env`
-
-2) 在 `docker-compose.yml` 中挂载并指定：
+1) 在 `docker-compose.yml` 中挂载并指定：
 
 ```yaml
 environment:
@@ -355,24 +352,21 @@ n8n 默认会通过 `NODES_EXCLUDE` 禁用一些高危节点（例如 **Command*
 
 当工作流规模达到几百、并发执行较高、或者需要更好的横向扩展能力时，建议使用 Queue 模式。
 
-本项目提供了一个可直接运行的参考编排：`docker-compose.queue.yml`，并配套脚本：
-
-- `run-queue.sh` / `run-queue.ps1`
-- `test-queue.sh` / `test-queue.ps1`
+本项目提供了一个可直接运行的参考编排：`docker-compose.queue.yml`。
 
 ### 1) 启动（Linux/macOS）
 
 ```bash
-chmod +x ./scripts/run-queue.sh ./scripts/test-queue.sh
-./scripts/run-queue.sh
-./scripts/test-queue.sh
+chmod +x ./scripts/run.sh ./scripts/test.sh
+./scripts/run.sh --queue
+./scripts/test.sh --queue
 ```
 
 ### 2) 启动（Windows）
 
 ```powershell
-.\windows\run-queue.ps1
-.\windows\test-queue.ps1
+.\windows\run.ps1 -Queue
+.\windows\test.ps1 -Queue
 ```
 
 ### 3) 扩容 worker（示例）
@@ -670,8 +664,8 @@ COMMUNITY_NODES="n8n-nodes-python@0.1.4" ARGOCD_VERSION="v2.13.3" ./scripts/buil
   - Linux/macOS：`./scripts/test.sh`
   - Windows：`.\windows\test.ps1`
 - Queue 模式：
-  - Linux/macOS：`./scripts/test-queue.sh`
-  - Windows：`.\windows\test-queue.ps1`
+  - Linux/macOS：`./scripts/test.sh --queue`
+  - Windows：`.\windows\test.ps1 -Queue`
 
 ## 后续：如何编写你自己的 Dockerfile（在 n8n-super 基础上扩展）
 
@@ -785,7 +779,7 @@ n8n 的 credentials 是加密存储的。多人共用实例时，必须固定 `N
 - Linux/macOS（Queue）：
 
 ```bash
-./scripts/run-queue.sh --pull --force-recreate
+./scripts/run.sh --queue --pull --force-recreate
 ```
 
 - Windows（单容器）：
@@ -797,7 +791,7 @@ n8n 的 credentials 是加密存储的。多人共用实例时，必须固定 `N
 - Windows（Queue）：
 
 ```powershell
-.\windows\run-queue.ps1 -Pull -ForceRecreate
+.\windows\run.ps1 -Queue -Pull -ForceRecreate
 ```
 
 ### 5) Python 依赖：按 workflow 定制的现实限制与可行方案

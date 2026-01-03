@@ -45,6 +45,9 @@ services:
     ports:
       - "5678:5678"
 
+    env_file:
+      - ./config/n8n-super.env
+
     environment:
       # --- n8n 基础能力 ---
       # 允许加载社区节点（n8n-nodes-python 等）
@@ -73,26 +76,26 @@ services:
       # 这些变量会在 entrypoint/python wrapper 中映射为 pip 标准变量：
       # - PIP_INDEX_URL / PIP_EXTRA_INDEX_URL / PIP_TRUSTED_HOST / PIP_DEFAULT_TIMEOUT
       # 留空表示“由 config/n8n-super.env 决定”（推荐）
-      N8N_PIP_INDEX_URL: ""
-      N8N_PIP_EXTRA_INDEX_URL: ""
-      N8N_PIP_TRUSTED_HOST: ""
-      N8N_PIP_DEFAULT_TIMEOUT: ""
+      N8N_PIP_INDEX_URL: ${N8N_PIP_INDEX_URL:-}
+      N8N_PIP_EXTRA_INDEX_URL: ${N8N_PIP_EXTRA_INDEX_URL:-}
+      N8N_PIP_TRUSTED_HOST: ${N8N_PIP_TRUSTED_HOST:-}
+      N8N_PIP_DEFAULT_TIMEOUT: ${N8N_PIP_DEFAULT_TIMEOUT:-}
 
       # --- Python 运行时自动装包（n8n-nodes-python/PythonFunction）---
       # N8N_PYTHON_AUTO_INSTALL:
       # - true: 每次执行 python3 前按需 pip install（见 n8n-python3-wrapper.sh）
       # - false: 不做自动安装
-      N8N_PYTHON_AUTO_INSTALL: "false"
+      N8N_PYTHON_AUTO_INSTALL: ${N8N_PYTHON_AUTO_INSTALL:-false}
 
       # N8N_PYTHON_PACKAGES:
       # - 额外 pip 包列表（空格分隔），适合临时加包
       # - 建议团队长期依赖用 requirements 文件方式 + 版本锁定
-      N8N_PYTHON_PACKAGES: ""
+      N8N_PYTHON_PACKAGES: ${N8N_PYTHON_PACKAGES:-}
 
       # N8N_PYTHON_REQUIREMENTS_FILE:
       # - requirements 文件路径（容器内路径）
       # - 推荐通过 volumes 把 config/requirements.txt 挂载到 /home/node/.n8n/requirements.txt
-      N8N_PYTHON_REQUIREMENTS_FILE: ""
+      N8N_PYTHON_REQUIREMENTS_FILE: ${N8N_PYTHON_REQUIREMENTS_FILE:-}
 
       # --- 企业多人场景：Python 独立 venv 缓存（按依赖 hash）---
       # 作用：避免多人/多工作流依赖互相污染；同一套依赖复用缓存避免重复下载

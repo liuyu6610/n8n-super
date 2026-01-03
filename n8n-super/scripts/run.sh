@@ -1,12 +1,41 @@
 #!/usr/bin/env bash
 # scripts/run.sh
 #
-# 说明：单容器模式（docker-compose.yml）的启动脚本。
+# 说明：启动 n8n（单容器或 Queue 模式）。
 #
 # 用法：
-#   ./scripts/run.sh [--no-build] [--no-detach]
+#   ./scripts/run.sh
+#   ./scripts/run.sh --queue
+#   ./scripts/run.sh --pull --force-recreate
+#
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+load_build_env() {
+  local build_env_file line key val
+  build_env_file="$ROOT_DIR/config/build.env"
+
+  if [[ -f "$build_env_file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line="${line%$'\r'}"
+      [[ -z "$line" ]] && continue
+      [[ "$line" == \#* ]] && continue
+      if [[ "$line" == $'\xEF\xBB\xBF'* ]]; then
+        line="${line#$'\xEF\xBB\xBF'}"
+      fi
+      key="${line%%=*}"
+      val="${line#*=}"
+      key="${key//[[:space:]]/}"
+      [[ -z "$key" ]] && continue
+      if [[ -z "${!key:-}" ]] && [[ -n "$val" ]]; then
+        export "$key=$val"
+      fi
+    done < "$build_env_file"
+  fi
+}
+
+QUEUE=0
 BUILD=1
 DETACHED=1
 PULL=0
@@ -14,17 +43,22 @@ FORCE_RECREATE=0
 
 usage() {
   cat <<'USAGE'
-Usage: ./scripts/run.sh [--no-build] [--no-detach] [--pull] [--force-recreate]
+Usage: ./scripts/run.sh [--queue] [--no-build] [--no-detach] [--pull] [--force-recreate]
 
-  --no-build    Do not run "docker compose build" before starting
-  --no-detach   Run "docker compose up" in foreground
-  --pull        Pull images before starting (for released team tags)
-  --force-recreate  Force recreate containers (ensure new image is used)
+  --queue           Use docker-compose.queue.yml
+  --no-build        Do not run "docker compose build" before starting
+  --no-detach       Run "docker compose up" in foreground
+  --pull            Pull images before starting
+  --force-recreate  Force recreate containers
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --queue)
+      QUEUE=1
+      shift
+      ;;
     --no-build)
       BUILD=0
       shift
@@ -53,8 +87,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+load_build_env
+
 COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
+if [[ "$QUEUE" -eq 1 ]]; then
+  COMPOSE_FILE="$ROOT_DIR/docker-compose.queue.yml"
+fi
 
 if [[ "$BUILD" -eq 1 ]]; then
   docker compose -f "$COMPOSE_FILE" build

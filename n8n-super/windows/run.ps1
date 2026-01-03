@@ -1,45 +1,55 @@
 # windows/run.ps1
 #
-# 作用：启动单容器模式（docker-compose.yml）。
-#
-# 默认行为：
-# - Build: true（先 docker compose build）
-# - Detached: true（后台 up -d）
+# 作用：启动 n8n（单容器或 Queue 模式）（Windows/PowerShell）。
 #
 # 用法：
 #   .\windows\run.ps1
-#   .\windows\run.ps1 -Build:$false
-#   .\windows\run.ps1 -Detached:$false
+#   .\windows\run.ps1 -Queue
+#   .\windows\run.ps1 -Pull -ForceRecreate
 param(
-  [switch]$Build,
-  [switch]$Detached,
+  [switch]$Queue,
+  [switch]$NoBuild,
+  [switch]$NoDetach,
   [switch]$Pull,
   [switch]$ForceRecreate
 )
 
-if (-not $PSBoundParameters.ContainsKey('Build')) { $Build = $true }
-if (-not $PSBoundParameters.ContainsKey('Detached')) { $Detached = $true }
-if (-not $PSBoundParameters.ContainsKey('Pull')) { $Pull = $false }
-if (-not $PSBoundParameters.ContainsKey('ForceRecreate')) { $ForceRecreate = $false }
-
 $RootDir = Resolve-Path (Join-Path $PSScriptRoot "..")
-$ComposeFile = Join-Path $RootDir "docker-compose.yml"
+$BuildEnvFile = Join-Path $RootDir "config\build.env"
 
-if ($Build) {
-  docker compose -f $ComposeFile build
+if (Test-Path $BuildEnvFile) {
+  Get-Content $BuildEnvFile | ForEach-Object {
+    $line = $_.Trim()
+    if (-not $line) { return }
+    if ($line.StartsWith('#')) { return }
+    $idx = $line.IndexOf('=')
+    if ($idx -lt 1) { return }
+    $k = $line.Substring(0, $idx).Trim()
+    $v = $line.Substring($idx + 1).Trim()
+    if (-not (Test-Path env:$k) -and $v) {
+      Set-Item -Path env:$k -Value $v
+    }
+  }
+}
+
+$composeFile = Join-Path $RootDir "docker-compose.yml"
+if ($Queue) {
+  $composeFile = Join-Path $RootDir "docker-compose.queue.yml"
+}
+
+if (-not $NoBuild) {
+  docker compose -f $composeFile build
 }
 
 if ($Pull) {
-  docker compose -f $ComposeFile pull
+  docker compose -f $composeFile pull
 }
 
 $upArgs = @()
-if ($ForceRecreate) {
-  $upArgs += "--force-recreate"
-}
+if ($ForceRecreate) { $upArgs += "--force-recreate" }
 
-if ($Detached) {
-  docker compose -f $ComposeFile up -d @upArgs
+if ($NoDetach) {
+  docker compose -f $composeFile up @upArgs
 } else {
-  docker compose -f $ComposeFile up @upArgs
+  docker compose -f $composeFile up -d @upArgs
 }
