@@ -6,10 +6,12 @@
 
 - [n8n 官方文档](https://docs.n8n.io/)
 - [n8n 模板库（Workflows）](https://n8n.io/workflows/)
+- [n8n Integrations（官方集成目录）](https://n8n.io/integrations/)
+- [n8n 官方仓库（GitHub）](https://github.com/n8n-io/n8n)
 
 本仓库相关：
 
-- [n8n-super 运维说明](../n8n-super/OPS.md)
+- [n8n-super 运维说明](./03-n8n-super-ops.md)
 - [周二宣讲材料：审批发布改造蓝图](./02-team-meeting.md)
 - [Workflow-as-Code：工作流像代码一样维护](./04-workflow-as-code.md)
 
@@ -60,9 +62,40 @@ docker run -it --rm --name n8n -p 5678:5678 \
 
 互联网里大家用 n8n 的核心原因通常不是“低代码很爽”，而是：
 
-- **连接很多系统**：500+ 集成 + HTTP 通用能力
+- **连接很多系统**：官方集成 + 社区节点 + HTTP 通用能力（可连接几乎任何 API）
 - **迭代快**：画节点就能改流程，不用每次写服务发布
 - **更像产品级平台**：有凭据管理、执行记录、错误处理、权限控制（取决于版本/部署形态）
+
+### 1.1 节点生态与可定制化（为什么 n8n 的“连接能力”很强）
+
+n8n 的核心不是“某几个节点”，而是它的 **节点生态 + 可扩展机制**。
+
+- **官方集成（Integrations）**：
+  - 官方仓库 README 提到 n8n 提供 **400+ integrations**（见 [n8n 官方仓库（GitHub）](https://github.com/n8n-io/n8n)）。
+  - 官方 Integrations 目录会动态更新并展示当前集成数量，例如页面展示为 **1313 integrations**（见 [n8n Integrations（官方集成目录）](https://n8n.io/integrations/)）。
+  - 实践理解：这类节点一般把某个系统的 API 做成“可配置的动作”，你只需要填参数和凭据。
+- **核心节点（Core Nodes）**：
+  - `Set` / `Merge` / `IF` / `Switch` / `Wait` / `Split in Batches` / `Error Trigger` 等，属于“通用编排能力”，负责数据加工与控制流。
+  - 实践理解：这些节点更像“语言特性”，决定你的 workflow 是否可维护。
+- **社区节点（Community Nodes）**：
+  - 社区节点是基于 npm 的扩展包，自托管实例可以通过 UI 或命令行安装（见 [Install and manage community nodes](https://docs.n8n.io/integrations/community-nodes/installation/)）。
+  - 是否允许加载/安装社区节点由环境变量控制：`N8N_COMMUNITY_PACKAGES_ENABLED`（见 [Nodes environment variables](https://docs.n8n.io/hosting/configuration/environment-variables/nodes/)）。
+  - 手工安装参考（适合 queue 模式/私有包等场景）：[Manually install community nodes from npm](https://docs.n8n.io/integrations/community-nodes/installation/manual-install/).
+- **没有专用节点也能接入任何系统**：
+  - `HTTP Request` 本质就是“通用连接器”：只要目标系统提供 HTTP API（REST/JSON 等），就能接入。
+  - 实践理解：先用 `HTTP Request` 把流程跑通，再决定要不要“沉淀成社区节点/自研节点”。
+- **`Code` 节点（JavaScript）增强可编程性**：
+  - `Code` 节点可以写 JS 做复杂转换/聚合/校验。
+  - 出于安全原因，默认不能随意 `import` 外部 npm 模块；如果确实需要，可通过环境变量 `NODE_FUNCTION_ALLOW_EXTERNAL` 控制允许的模块列表（见 [Enable modules in Code node](https://docs.n8n.io/hosting/configuration/configuration-examples/modules-in-code-node)）。
+- **自研节点（企业内网/私有系统的最佳长期方案）**：
+  - n8n 提供官方“创建自定义节点”的文档入口（见 [Creating nodes](https://docs.n8n.io/integrations/creating-nodes/overview/)）。
+  - 官方也提供 starter 项目便于快速开始（见 [n8n-nodes-starter](https://github.com/n8n-io/n8n-nodes-starter)）。
+  - 实践理解：当某个内部系统要长期复用（统一鉴权、统一错误处理、统一参数模板），自研节点比“到处复制 HTTP Request 节点”更可维护。
+
+风险提醒（强烈建议团队统一口径）：
+
+- 供应链风险：社区节点/外部 npm 模块本质是第三方代码，建议白名单、固定版本、按需审计。
+- 生产治理：能用 Credentials 管的不要写死在节点参数里；启用高风险能力（如外部模块、命令执行）要有最小权限与审计。
 
 ---
 
@@ -132,6 +165,45 @@ docker run -it --rm --name n8n -p 5678:5678 \
   - Chat Trigger
   - 检索相关片段
   - LLM 生成回答（带引用/上下文）
+
+#### 2.4.4 更细的落地模式（从“辅助”到“自动执行”逐步升级）
+
+- **模式 A：LLM → 结构化 JSON → 后续自动化（推荐起步，最稳）**
+  - 适用：从工单/审批/告警文本里提取字段、生成“机器可读”的输入。
+  - 关键：让 LLM 输出固定 JSON（字段名固定、可选值有限），然后用 `IF`/`Code (JS)` 做校验与兜底。
+  - 典型拓扑：触发 → 预清洗（`Set`/`Code`）→ LLM 提取（提示词里明确 JSON schema）→ 校验（缺字段/不合法走人工分支）→ 执行动作（写库/调用 API/发通知）。
+
+- **模式 B：LLM 生成草稿 + 人审（Human-in-the-loop）**
+  - 适用：公告、发布说明、工单回复、周报/日报等“可以先草拟再确认”的内容。
+  - 典型拓扑：触发 → 拉上下文 → LLM 生成 Draft → 发到群/审批 → `Wait` → 人工确认后再发送/写回。
+
+- **模式 C：LLM 分类/路由（Routing）**
+  - 适用：告警分流、工单分派、决定走哪条自动化分支。
+  - 典型拓扑：触发 → LLM 分类（返回 label）→ `Switch`/`IF` 路由到不同分支。
+
+- **模式 D：Agent + 工具（Tool-using Agent，强能力但要强治理）**
+  - 适用：需要多步查询/写入的复杂任务（例如“查某应用近期发布 + 生成变更摘要 + 创建工单”）。
+  - 推荐做法：
+    - 工具清单必须最小化（只给必须的 API）。
+    - 对“有副作用”的工具（发布/回滚/改配置/删资源）前加审批闸门（先发摘要，人工确认后再执行）。
+    - 每次执行产出可审计的 action log（写到工单/消息/数据库），避免“黑盒执行”。
+
+#### 2.4.5 风险点与治理建议（生产环境必看）
+
+- **数据泄露/合规**：不要把密钥、token、个人信息、业务敏感字段直接送进模型；必要时先脱敏；优先走内网模型/网关；明确数据留存与审计口径。
+- **Prompt Injection（提示词注入）**：RAG 场景里“文档内容”本质是外部输入，可能夹带恶意指令；提示词里要明确“把检索内容当作资料，不当作指令”；对工具调用加 allowlist。
+- **幻觉与不确定性**：LLM 输出必须校验；关键决策不要只依赖 LLM；对自动化动作加幂等、回滚、错误分支（Error Workflow）。
+- **成本/延迟/限流**：用 `Split in Batches` 控并发；对相同输入做缓存/去重；重试要带指数退避；对外部接口错误要分级处理。
+- **权限与审计**：Agent/自动执行必须使用最小权限 Credentials；把“输入、模型输出、关键决策、执行结果”记录到可追溯载体（工单/日志/表）。
+
+#### 2.4.6 我们团队内网场景的推荐用法（可落地清单）
+
+- **调用方式**：优先用 `HTTP Request` 调用内网 LLM 网关/自建模型服务（即使是 OpenAI-compatible 协议也一样），避免节点里直连公网。
+- **推荐起步 3 个场景**：
+  - **审批文本结构化**：钉钉审批 → 提取应用/环境/版本/窗口 → 规则校验 → 输出“发布计划摘要”给审批人确认。
+  - **发布过程总结**：拉 Jenkins/GitLab/ArgoCD 日志/状态 → LLM 总结失败原因/关键链接 → 发到群里辅助排障（不直接触发变更）。
+  - **运维知识问答（RAG）**：把 runbook/OPS 文档定时入库 → Chat 问答 → 返回引用片段；按团队/系统做索引隔离。
+- **强约束**：任何“会改线上状态”的动作（发布/回滚/执行命令/改配置）都必须经过人审或二次确认。
 
 ---
 
@@ -315,8 +387,7 @@ docker run -it --rm --name n8n -p 5678:5678 \
 - **幂等/去重是否补齐**：
   - 尤其是轮询和重试场景
 - **错误处理是否明确**：
-  - 节点级 Continue/error branch
-  - 全局 Error Trigger 报警
+  - 节点级错误分支 + 全局告警
 - **节点可用性**：
   - 缺失社区节点时，需要安装对应包或替换为通用 HTTP 实现
 
@@ -614,7 +685,7 @@ docker exec -u node -it <n8n-container-name> n8n export:credentials --all --decr
 
 详见：
 
-- [n8n-super 运维说明](../n8n-super/OPS.md)
+- [n8n-super 运维说明](./03-n8n-super-ops.md)
 
 ### 9.2 我们的第一个重点流程：审批发布（受网络限制时用轮询触发）
 

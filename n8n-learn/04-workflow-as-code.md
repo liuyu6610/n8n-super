@@ -9,6 +9,34 @@
 - **可评审**：像代码一样走 PR/CR
 - **可回滚**：变更出问题可以快速回滚到上一个稳定版本
 
+### 1.1 什么叫 workflow 资产化（你们到底在管理什么）
+
+n8n 的 workflow 在技术实现上是存储在数据库里的“配置 + 状态”。UI 里点保存，本质是在改数据库。
+
+所以 workflow 资产化不是“把流程画得更规范”，而是把它当成**生产资产**来治理，至少要把下面几件事说清楚并落到制度里：
+
+- **资产边界**：哪些东西算 workflow 的一部分（应版本化/可发布），哪些是环境差异或敏感配置（必须分离）。
+- **生命周期**：怎么开发、评审、发布、变更、下线、回滚。
+- **证据链**：怎么做到审计与可追溯（执行记录、runId、外部系统链接）。
+- **责任归属**：owner、风险等级、runbook、权限。
+
+建议把一个“可长期维护”的 workflow 拆成 4 类资产分别治理：
+
+- **Workflow 定义（主资产）**：workflow JSON + 名称 + tags + folder/project + owner。
+  - 这部分决定“业务逻辑”，适合进入 Git 做版本化与评审。
+- **运行时依赖（平台/节点/镜像）**：n8n 版本、`n8n-super` 镜像 tag、社区节点/自研节点包版本、`Code` 节点允许的外部模块清单等。
+  - 这部分决定“同一份 JSON 在目标环境是否能跑起来”。
+- **敏感配置（Credentials / Variables）**：token/密码/证书等。
+  - 不应进入 Git；不同环境不同值，用外部 secrets 或环境初始化方式解决。
+- **运行证据链（Execution 数据）**：每次执行的输入/输出、错误点、runId、外部链接（MR/Jenkins/Argo）等。
+  - 这是审计与排障的核心资产，必须可检索、可保留、可清理（prune）。
+
+资产化落地后的“验收标准”可以这样写：
+
+- **可复制**：任何人拿到 Git 里的定义，在 Dev/Staging 能一键导入并跑通（依赖与凭据有明确准备步骤）。
+- **可发布**：有明确的“从 Dev 到 Prod”的发布动作（自动导入/启用），而不是“直接在 Prod UI 点保存”。
+- **可回滚**：回滚是“回到某个 commit 对应的 workflow 定义（必要时连同平台版本一起回）”，并且有止血手段（disable）。
+
 ## 2. 关键前提：n8n 是“有状态系统”，必须先选“权威源（Source of Truth）”
 
 Workflow-as-Code 的核心不是“能导出 JSON”，而是你们要先规定：
@@ -28,23 +56,149 @@ Workflow-as-Code 的核心不是“能导出 JSON”，而是你们要先规定�
 
 ## 3. 两套落地方案（按是否有 Enterprise 能力划分）
 
-### 3.1 方案 1：n8n Enterprise 的 Source Control & Environments（有证书就用）
+### 3.1 方案 1：n8n Enterprise 的 Source Control & Environments（n8n 内置 Git）
 
-特点：
+官方资料（建议先读这几页，都是一手说明）：
 
-- n8n 内置 Git 连接（push/pull）
-- 支持环境概念（不同实例绑定不同分支）
-- 支持 **Protected instance**（保护生产环境，防止 UI 直接改）
+- [Source control and environments](https://docs.n8n.io/source-control-environments/)
+- [Set up source control](https://docs.n8n.io/source-control-environments/setup/)
+- [Git and n8n](https://docs.n8n.io/source-control-environments/understand/git/)
+- [Push and pull](https://docs.n8n.io/source-control-environments/using/push-pull/)
+- [Branch patterns](https://docs.n8n.io/source-control-environments/understand/patterns/)
 
-注意：
+#### 3.1.1 能解决什么问题（从“导出 JSON”升级成“平台内 GitOps”）
 
-- n8n 的 source control **不是完整 Git**，不要假设 PR/merge 都在 n8n 内完成
-- 仍建议 GitLab/GitHub 上做评审与合并
+- **平台内直接 Push / Pull**：n8n 在 UI 里直接把 workflow 变更 push 到 Git，再从 Git pull 回实例。
+- **把环境概念产品化**：不同 n8n 实例可以绑定不同 Git branch，形成 Dev/Test/Prod 环境链路。
+- **保护生产**：支持 **Protected instance**，防止用户在生产实例直接编辑 workflow。
 
-适用：
+#### 3.1.2 可用性与权限边界（谁能配置、谁能 Push/Pull）
 
-- 你们已经采购/计划采购 Enterprise
-- 希望“平台内”有更强的变更管控能力
+官方说明要点：
+
+- **可用性**：Enterprise 功能。
+- **启用/配置权限**：必须是 n8n instance owner 或 instance admin。
+- **Pull（从 Git 拉到实例）**：必须是 instance owner 或 instance admin。
+- **Push（从实例推到 Git）**：instance owner / instance admin / project admin 都可以。
+
+#### 3.1.3 在哪里配置（UI 路径与认证方式）
+
+配置入口（官方指引）：
+
+- `Settings > Environments` → `Connect`
+- 选择连接方式：
+  - **SSH**：填写仓库 SSH URL；n8n 会提供 SSH key；用它去 Git 平台创建 deploy key（要求写权限）。
+  - **HTTPS**：填写仓库 HTTPS URL；使用 Git 平台的 Personal Access Token（PAT）做认证。
+- 在 `Instance settings` 里选择当前实例绑定的 branch
+- 可选：
+  - 勾选 **Protected instance**（阻止在该实例直接改 workflow，适合 Prod）
+  - 给实例设置颜色（在菜单里辅助识别环境）
+- `Save settings`
+
+#### 3.1.4 Push / Pull 到底做了什么（n8n commit 什么、覆盖什么）
+
+官方关键结论（非常重要，别靠猜）：
+
+- **Commit 在 n8n 里等价于一次 Push**：在 n8n 中，commit 和 push 同时发生。
+- **Push 的是“当前保存版本”，不是“已发布版本”**：你需要在目标环境再单独 publish。
+- **Pull 会覆盖本地未推送的更改**：如果本地改了但没 push，pull 时会被覆盖。
+
+n8n 会把下面这些内容写入 Git：
+
+- **Workflows**（可以选择要 push 哪些 workflow）
+  - 包括 workflow 的 tags
+  - 包括 workflow owner 的 email（用于跨实例映射归属）
+- **Credential stubs（凭据存根）**
+  - 提交 ID / name / type
+  - 其它字段只有在字段是 expression 时才会包含
+- **Variable stubs（变量存根）**：提交 ID 与 name
+- **Projects**
+- **Folders**
+
+Pull 的行为与注意事项：
+
+- Pull 时如果引入了新的变量/凭据存根，n8n 会提示你需要先补齐值才能使用。
+- Git 仓库里删除了 workflow/credential/variable/tag 时，本地不会自动删除；pull 后 n8n 会提示是否删除“过期资源”。
+- Pull 已发布 workflow 时，n8n 会在拉取过程中临时 unpublish 再 publish，可能导致该 workflow 有几秒钟不可用。
+- 跨实例 pull 时，workflow/credential 的 owner 可能会变化：n8n 会尝试按用户 email 或项目名匹配；匹配不到时可能改归属到当前 pull 的人（或创建同名 project）。
+
+#### 3.1.5 冲突与覆盖（它不是完整 Git，必须按规则用）
+
+官方明确：
+
+- n8n 的 source control **不是完整 Git**，不要指望在 n8n 内完成 PR/merge。
+- **仍建议在 GitLab/GitHub 上做评审与合并**（PR/MR），把“合并动作”留在 Git 平台。
+- n8n 会自动处理 credentials / variables 的 merge 行为，但 **无法检测 workflows 的冲突**。
+- 对 workflow 冲突，你需要在 push/pull 时明确选择怎么处理（本地覆盖 Git 或 Git 覆盖本地）。
+
+为了避免数据丢失，官方给的实践建议可以总结成一句话：
+
+- **让 workflow 的流向保持单向**：例如只在 Dev 改 → push 到 Dev branch → 在 Git 平台走 PR 合并到 Prod branch → Prod 实例 pull。
+- 不要在同一个实例同时“既 push 又 pull”（官方不推荐）。
+- 不要“一把梭 push 全部 workflows”，只 push 需要的那批。
+- 谨慎手工编辑 Git 仓库里的这些文件，避免产生不可预期差异。
+
+#### 3.1.6 推荐的分支/实例模式（和你们的 GitLab 流程对齐）
+
+官方推荐的一个安全模式是 **多实例 + 多分支**：
+
+- Dev 实例 ↔ `dev` 分支（只 push）
+- Prod 实例 ↔ `prod` 分支（只 pull）
+- 通过 Git 平台的 PR/MR 把 `dev` 合并到 `prod`，然后 Prod 实例 pull
+
+优点：多一道 PR 审查闸门，降低误操作进入生产的风险。
+
+#### 3.1.7 团队统一操作模板：每次修改都入库（Dev Push → MR → Prod Pull）
+
+目标：任何人只要按步骤做，就能保证“改动一定入库”、并且不会绕过评审进入生产。
+
+角色建议（最少三类）：
+
+- 开发者：在 Dev 实例编辑 workflow，并 Push 到 Git（需要 instance owner/admin 或 project admin 权限）。
+- 审核者：在 Git 平台评审 MR（至少 1 人）。
+- 发布者：在 Prod 实例 Pull 并启用（必须 instance owner/admin；Prod 建议开启 Protected instance）。
+
+前置约束（写进团队制度）：
+
+- Prod 实例必须开启 Protected instance：禁止在 Prod UI 直接编辑。
+- workflow 变更只允许在 Dev 实例进行；不允许在 Prod 做“临时热修”后再补入库。
+- 一个 workflow 同一时间只允许 1 人修改（可以用约定的 Tag/备注做“占用/加锁”）。
+
+每次修改 SOP（建议 5 分钟内完成入库）：
+
+1. 在 Dev 实例完成修改：保存 → 手动执行/最小验证 → 确认 Tags（owner/env/risk/runbook）齐全。
+2. 立刻 Push 到 Git（n8n 菜单里的 Push）：
+   - 只勾选本次涉及的 workflow（new/modified/deleted），不要全选。
+   - 填写 commit message（示例模板见下）。
+   - 点击 `Commit and Push`。
+3. 在 Git 平台创建 MR：`dev` → `prod`（或你们约定的主干分支）：
+   - MR 描述至少包含：变更点、验证方式、风险等级、回滚方案。
+4. MR 合并后，发布者在 Prod 实例执行 Pull：
+   - n8n 菜单点 Pull（必要时选择 `Pull and override`，以 Git 为准）。
+   - 如果提示有新的 credential/variable stubs：先在 Prod 补齐值再启用 workflow。
+5. 在 Prod 做上线确认：
+   - 检查 workflow 是否处于“启用/发布”状态（Push 的是保存版本，不等于已发布）。
+   - 跑一次最小验证（或观察首条执行），确认无误。
+
+提交信息模板（commit message）：
+
+- `feat(workflow): <service> <what> [ticket]`
+- `fix(workflow): <service> <what> [ticket]`
+- `chore(workflow): <service> <what> [ticket]`
+
+MR 描述模板（建议复制粘贴）：
+
+- 目标/背景：
+- 变更点：
+- 影响范围：
+- 风险评估（risk: low/medium/high）：
+- 验证方式：
+- 回滚方式：
+
+注意事项：
+
+- 如果你确实需要 Pull（例如共享一个 Dev 实例）：先 Push 你当前改动，再 Pull，避免覆盖丢失。
+- n8n 无法检测 workflow 冲突：多人同时改同一 workflow，后 Push 的会覆盖 Git 版本。
 
 ### 3.2 方案 2：开源可用的 CLI + GitOps（无 Enterprise 也能落地）
 
@@ -64,6 +218,37 @@ Docker 场景下执行方式（官方推荐形式）：
 - `docker exec -u node -it <container> <n8n-cli-command>`
 
 你们的 `n8n-super` 是 Docker 形态，这条路径完全适配。
+
+#### 3.2.1 团队统一操作模板：每次修改都入库（CLI 导出 + Git 提交）
+
+适用：没有 Enterprise，或不启用 Source Control 功能，但仍希望所有 workflow 变更可追溯、可评审、可回滚。
+
+推荐做法：开发仍在 Dev UI；“入库动作”由 CLI 导出到固定目录，然后提交 Git。
+
+1. 在 Dev 实例改完 workflow 并保存，记录 workflow ID。
+2. 导出到容器临时目录，再拷贝到本机 Git 仓库（Docker 示例，推荐）：
+   - 按 ID 导出（推荐用于每次变更）：
+     - `docker exec -u node -it <n8n-container-name> sh -lc "mkdir -p /tmp/n8n-export && n8n export:workflow --id=<ID> --output=/tmp/n8n-export/workflow.json"`
+     - `docker cp <n8n-container-name>:/tmp/n8n-export/workflow.json workflows/dev/<workflow>.json`
+   - 全量备份（适合定时备份/大版本升级）：
+     - `docker exec -u node -it <n8n-container-name> sh -lc "mkdir -p /tmp/n8n-backups/latest && n8n export:workflow --backup --output=/tmp/n8n-backups/latest/"`
+     - `docker cp <n8n-container-name>:/tmp/n8n-backups/latest backups/latest`
+3. `git add/commit/push`，并走 MR/CR（commit message / MR 模板可复用 3.1.7）。
+4. 合并后在目标环境导入（Docker 示例）：
+   - 单文件：
+     - `docker exec -u node -it <n8n-container-name> sh -lc "mkdir -p /tmp/n8n-import"`
+     - `docker cp workflows/prod/<workflow>.json <n8n-container-name>:/tmp/n8n-import/workflow.json`
+     - `docker exec -u node -it <n8n-container-name> n8n import:workflow --input=/tmp/n8n-import/workflow.json`
+   - 目录（配合 `--backup`/`--separate`）：
+     - `docker exec -u node -it <n8n-container-name> sh -lc "mkdir -p /tmp/n8n-import/latest"`
+     - `docker cp backups/latest <n8n-container-name>:/tmp/n8n-import/latest`
+     - `docker exec -u node -it <n8n-container-name> n8n import:workflow --separate --input=/tmp/n8n-import/latest/`
+5. 在目标环境启用并验证（同 3.1.7 的上线确认）。
+
+注意：
+
+- CLI 导出会包含 workflow/credential 的 ID；导入时如果目标库存在相同 ID 可能覆盖，需要提前规划。
+- 不要把 credentials 明文导出入库（除非有严格的加密/审计方案）。
 
 ## 4. 工作流资产化：目录结构与命名规范（建议团队统一）
 

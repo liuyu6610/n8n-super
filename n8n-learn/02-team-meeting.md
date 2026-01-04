@@ -40,7 +40,7 @@
   - 生产建议通过“受控执行器”（Jenkins/AWX/自研 Agent）执行变更
   - n8n 作为控制面（control plane），把权限收敛、审计拉满
 
-你们的 `n8n-super` 镜像已经为 SRE 场景做了增强（见 `../n8n-super/README.md`）：
+你们的 `n8n-super` 镜像已经为 SRE 场景做了增强（见 `./03-n8n-super-ops.md`）：
 
 - 预装 `argocd` CLI
 - 预装常用社区节点：钉钉、GitLab、Jenkins、K8s、Helm、ntfy、Browser、PythonFunction

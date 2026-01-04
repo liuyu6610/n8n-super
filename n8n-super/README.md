@@ -1,296 +1,369 @@
-# n8n-super（基于 n8nio/n8n:1.78.1 的增强镜像）
+# n8n-super：自定义 n8n 镜像（构建 / 扩展 / 发版指南）
 
-## 目标
+本文专门说明：**如何在本仓库基础上制作你自己的 n8n 镜像**（安装工具链、固化社区节点、Python 运行时与依赖策略、发版与回滚）。
 
-在 `n8nio/n8n:1.78.1` 官方镜像基础上增强：
+运维与机制说明（面向使用者/运维）请看：
 
-- **Python 节点**：预装社区节点 `n8n-nodes-python`（提供 `PythonFunction` 节点）
-- **Python 运行环境**：内置 Python3 + venv（`/opt/n8n-python-venv`），并支持容器启动时按环境变量自动 `pip install`
-- **Shell 能力**：通过内置的 **Execute Command（Command）节点** 执行 shell（需解除默认禁用，见下文安全说明）
-- **ArgoCD**：预装 `argocd` CLI，可在工作流里用 Execute Command 节点调用
-- **Jenkins / GitLab**：n8n 内置节点（无需额外安装）
+- `../n8n-learn/03-n8n-super-ops.md`
 
-## 使用方式概览
+---
 
-- **构建期可配置项**：统一写在 `config/build.env`（build args：`ARGOCD_VERSION` / `COMMUNITY_NODES` / `PIP_*`）。
-- **运行期可配置项**：统一写在 `config/n8n-super.env`（启动时加载，pip 源映射、Python 自动装包开关等）。
-- **Python 依赖**：团队统一依赖建议写在 `config/requirements.txt`，通过 volume 挂载到容器内并在运行期按需安装。
+## 0. TL;DR：最小改动入口（你通常只需要改这几个文件）
 
-## 目录结构
+目标：让你读完本 README 后，**只改少数入口**即可完成“新增节点/新增工具/新增 Python 包/升级版本/发版回滚”。
 
-- `Dockerfile`：镜像构建文件
-- `docker-compose.yml`：单容器模式编排（端口、数据卷、健康检查、配置注入）
-- `docker-compose-queue.yml`：Queue 模式编排（web/worker/webhook + redis + postgres）
-- `docker-entrypoint-extra.sh`：启动入口（加载配置文件/环境变量后转交官方 `/docker-entrypoint.sh`）
-- `n8n-python3-wrapper.sh`：venv 内 `python3` wrapper（运行时按依赖 hash 创建/复用独立 venv）
+建议把改动分为 4 类，对应改动点如下：
+
+1) **新增/升级社区节点（n8n-nodes-xxx）**
+   - 改：`config/community-nodes.list`
+   - 然后：构建新镜像 tag → 更新 `docker-compose*.yml` 的 `image:` → `--force-recreate`
+
+2) **新增/升级系统工具 / CLI（kubectl/helm/terraform/自研二进制等）**
+   - 改：`Dockerfile`
+   - 然后：构建新镜像 tag → 更新 `docker-compose*.yml` 的 `image:` → `--force-recreate`
+
+3) **新增/升级团队默认 Python 包（偏“通用运维库”）**
+   - 改：`config/requirements.txt`
+   - 然后：构建新镜像 tag → 更新 `docker-compose*.yml` 的 `image:` → `--force-recreate`
+   - 说明：本仓库选择“离线/新手友好”的策略：把常用依赖尽量预装进镜像，减少运行期下载失败；如果只是某条 workflow 临时依赖，仍可用运行期变量 `N8N_PYTHON_PACKAGES` 补充。
+
+4) **升级 n8n 基础版本**
+   - 改：`Dockerfile` 的 `FROM n8nio/n8n:<version>`
+   - 同步改：`docker-compose*.yml` 的 `image:` tag（建议用 `n8n-super:<n8nVersion>-rN`）
+
+验证统一用：
+
+- Linux/macOS：`./scripts/test.sh`（必要时加 `--queue`）
+- Windows：`.\windows\test.ps1`（必要时加 `-Queue`）
+
+---
+
+## 1. 你会得到什么（n8n-super 的目标）
+
+在官方 `n8nio/n8n:1.78.1` 基础上，这个镜像主要增强：
+
+- **系统工具链**：`bash/curl/git/jq/openssh-client/rsync/tar/unzip/wget`（以及浏览器运行时依赖）
+- **Browser 场景**：预装 `chromium`
+- **PythonFunction 场景**：预装 `python3` + venv/pip，并提供“按依赖 hash 的隔离 venv 缓存”机制（解决多人共用依赖冲突）
+- **GitOps/发布类场景**：预装 `argocd` CLI（版本可控）
+- **社区节点固化**：构建期安装 `config/community-nodes.list` 中的节点，并在启动时自动同步到 volume（避免“装了但 UI 看不到”）
+
+## 2. 目录结构（你改哪里）
+
+- `Dockerfile`
+  - 镜像构建主逻辑（装系统包 / 创建基础 venv / 安装社区节点 / 安装 argocd）
+- `docker-entrypoint-extra.sh`
+  - 启动时加载配置文件 + 映射 pip 环境变量 + 同步社区节点 + 可选清理 venv 缓存
+- `n8n-python3-wrapper.sh`
+  - `python3` wrapper：按 requirements+pip 源计算 hash，并创建/复用独立 venv
 - `config/`
-  - `config/n8n-super.env`：启动配置注入文件（pip 源、自动装包开关、缓存目录等）
-  - `config/requirements.txt`：Python 依赖示例（可替换为你的依赖集合）
-- `scripts/`
-  - `scripts/*.sh`：Linux/macOS 真实实现脚本
-- `windows/`
-  - `windows/*.ps1`：Windows/PowerShell 脚本
+  - `build.env`：构建期 build-arg 配置（ARGOCD_VERSION / COMMUNITY_NODES / PIP_*）
+  - `community-nodes.list`：团队统一的社区节点清单（建议固定版本）
+  - `requirements.txt`：团队统一 Python 依赖（建议固定版本）
+  - `n8n-super.env`：运行期配置入口（启动时加载）
+- `scripts/*.sh`：Linux/macOS 构建/启动/自检脚本
+- `windows/*.ps1`：Windows 构建/启动/自检脚本
+- `docker-compose.yml`：单容器模式（SQLite），适合开发/PoC
+- `docker-compose-queue.yml`：Queue 模式（Postgres+Redis+Web/Worker/Webhook），适合生产
 
-## 快速开始（Linux 推荐）
+## 3. 快速开始（构建并跑起来）
 
-### 0) 前置条件
-
-- Docker Engine
-- Docker Compose v2（`docker compose version`）
-
-### 1) 构建镜像
+### 3.1 Linux/macOS
 
 ```bash
 chmod +x ./scripts/build.sh ./scripts/run.sh ./scripts/test.sh
+
+# 构建（默认 tag：n8n-super:1.78.1）
 ./scripts/build.sh
-```
 
-### 2) 启动
-
-```bash
+# 启动（默认会执行 docker compose build，如已构建可加 --no-build）
 ./scripts/run.sh
-```
 
-### 3) 健康检查
-
-```bash
-curl -fsS http://localhost:5678/healthz
-```
-
-### 4) 验证“Python 自动装包”是否生效
-
-```bash
+# 自检
 ./scripts/test.sh
-docker exec n8n-super python3 -c "import requests; print('requests:', requests.__version__)"
 ```
 
-### 5) 打开 Web UI
-
-- `http://localhost:5678/`
-
-## 快速开始（Windows PowerShell）
-
-### 1) 构建镜像（Windows）
+### 3.2 Windows PowerShell
 
 ```powershell
 cd d:\job-test\n8n-best\n8n-super
+
+# 构建（默认 tag：n8n-super:1.78.1）
 .\windows\build.ps1
-```
 
-### 2) 运行（Windows）
-
-```powershell
+# 启动（默认会执行 docker compose build，如已构建可加 -NoBuild）
 .\windows\run.ps1
-```
 
-访问：
-
-- Web UI：`http://localhost:5678/`
-- 健康检查：`http://localhost:5678/healthz`
-
-### 3) 验证（Windows）
-
-```powershell
+# 自检
 .\windows\test.ps1
 ```
 
-验证内容包括：
+访问：`http://localhost:5678/`，健康检查：`http://localhost:5678/healthz`
 
-- `/healthz` 可用
-- `n8n --version` 输出版本
-- `argocd version --client` 可执行
-- venv 内 `python-fire` 可导入
-- `n8n-nodes-python` 包存在
+---
 
-## 配置入口（建议只改这 3 处）
+## 4. 构建参数与配置入口（建议统一在这两处改）
 
-- **`config/build.env`**：构建期 build args（由 `scripts/build.sh` 与 `windows/build.ps1` 自动读取）。
-- **`config/n8n-super.env`**：运行期环境变量文件（由容器启动脚本加载）。
-- **`config/requirements.txt`**：团队 Python 统一依赖（默认已在 compose 里挂载到容器）。
+### 4.1 构建期（build-time）：`config/build.env`
 
-## 变更/发版逻辑（新增节点/新增 Python 包/新增工具）
+此文件用于 build 脚本/CI 传递 build args（空值表示不传）。
 
-### 核心原则
+- `ARGOCD_VERSION`：控制 Dockerfile 下载的 argocd 版本
+- `COMMUNITY_NODES`：可选，空格分隔的 npm 包列表；为空时默认使用 `config/community-nodes.list`
+- `PIP_INDEX_URL` / `PIP_EXTRA_INDEX_URL` / `PIP_TRUSTED_HOST` / `PIP_DEFAULT_TIMEOUT`
+  - 仅影响构建期 pip install（基础 venv 预装）
 
-- **需要重建镜像**：新增/升级 **n8n 社区节点（npm 包）**、新增/升级 **系统工具/CLI**、修改 `Dockerfile`、升级基础镜像/系统依赖。
-- **不需要重建镜像**：新增/升级 **Python 包**（走运行期自动安装 + venv 缓存），调整 pip 源/环境变量（一次配置长期复用）。
+### 4.2 运行期（runtime）：`config/n8n-super.env`
 
-### 1) 新增/升级 n8n 社区节点（node 节点 / npm 包）= 必须重建镜像
+容器启动时由 `docker-entrypoint-extra.sh` 加载（`docker-compose.yml` 会把它挂载到 `/etc/n8n-super.env` 并设置 `N8N_SUPER_CONFIG_FILE=/etc/n8n-super.env`）。
 
-#### 节点安装“定义在哪里”
+你通常只需要改这几类：
 
-- **安装定义**：`Dockerfile` 中的 `ARG COMMUNITY_NODES` + `npm install ...`
-- **默认来源**：当 `COMMUNITY_NODES` 为空时，从 `config/community-nodes.list` 读取（镜像构建期 COPY 到 `/opt/n8n-super-community-nodes.list`）
-- **安装落地目录**：`/home/node/.n8n/nodes/node_modules/<n8n-nodes-xxx>`
+- `N8N_PIP_*`：公司内网 pip 源配置（会映射为 pip 标准变量 `PIP_*`）
+- `N8N_PYTHON_*`：Python 自动装包与 venv 缓存目录
 
-#### 推荐方式（团队统一）
+重要说明（容易踩坑）：
 
-1) 编辑 `config/community-nodes.list`，每行一个包（建议固定版本，例如你现在的：`n8n-nodes-browser@0.2.4`）
-2) 构建新镜像 tag（建议 rN 递增，便于回滚）
-   - Linux/macOS：
-     - `./scripts/build.sh --tag n8n-super:1.78.1-r2`
-   - Windows：
-     - `.\windows\build.ps1 -Tag "n8n-super:1.78.1-r2"`
-3) 让运行端使用新镜像并强制重建容器
-   - Linux/macOS：
-     - `./scripts/run.sh --force-recreate`
-     - Queue：`./scripts/run.sh --queue --force-recreate`
-   - Windows：
-     - `.\windows\run.ps1 -ForceRecreate`
-     - Queue：`.\windows\run.ps1 -Queue -ForceRecreate`
+- `docker-compose.yml` 的 `environment:` 段对同名变量有更高优先级。
 
-#### 临时方式（一次性覆盖，不改列表）
+当前仓库的实际情况：
 
-如果你不想改 `config/community-nodes.list`，可以在 `config/build.env` 里设置：
+- `config/n8n-super.env` 里默认 `N8N_PYTHON_AUTO_INSTALL=true`
+- 但 `docker-compose.yml` 的 `environment:` 里写了：`N8N_PYTHON_AUTO_INSTALL: ${N8N_PYTHON_AUTO_INSTALL:-false}`
 
-- `COMMUNITY_NODES="n8n-nodes-python@0.1.4 n8n-nodes-xxx@1.2.3"`
+这意味着：
 
-然后走同样的 build + force-recreate。
+- 如果你不在宿主环境（或 `.env`）显式设置 `N8N_PYTHON_AUTO_INSTALL=true`，最终容器里会变成 `false`，导致 wrapper 不会自动装包。
 
-### 2) 新增/升级 Python 包（requests/pandas/…）= 不需要重建镜像
+推荐做法（二选一）：
 
-#### 运行期安装机制是什么
+1) **团队统一（推荐）**：直接把 `docker-compose.yml` 里的默认值改成 `true`。
+2) **部署侧覆盖**：在运行机器上设置环境变量 `N8N_PYTHON_AUTO_INSTALL=true`（或在 `.env` 文件里设置），不改 compose。
 
-1) 运行期由 `config/n8n-super.env` 控制：
-   - `N8N_PYTHON_AUTO_INSTALL=true`（默认已开启）
-   - `N8N_PYTHON_REQUIREMENTS_FILE=/home/node/.n8n/requirements.txt`
-2) `n8n-python3-wrapper.sh` 会在每次执行 `python3` 前：
-   - 根据 requirements 内容 + packages + pip 源参数计算一个 hash
-   - 在 `N8N_PYTHON_VENV_CACHE_DIR` 下创建/复用独立 venv（默认 `/home/node/.n8n/pyenvs/<hash>`）
-   - 同一套依赖复用缓存，避免重复下载；不同依赖互不污染
+---
 
-#### 团队统一依赖（推荐）
+## 5. 如何新增/升级社区节点（n8n-nodes-xxx）
 
-1) 编辑 `config/requirements.txt`（建议固定版本）
-2) 重启容器即可（不需要 build 镜像）
-   - 单容器：`./scripts/run.sh --force-recreate`
-   - Queue：`./scripts/run.sh --queue --force-recreate`
-3) 等下一次 PythonFunction 执行时会自动安装；你也可以主动验证：
-   - `docker exec n8n-super python3 -c "import requests; print(requests.__version__)"`
+### 5.1 推荐方式：维护 `config/community-nodes.list`
 
-#### 临时给某个实例加包（不改 requirements 文件）
+- 每行一个 npm 包，**建议固定版本**（便于复现/回滚）
+- Dockerfile 在构建期会读取该文件并安装
 
-在 `config/n8n-super.env` 里设置（或用环境变量覆盖）：
+修改后按发版流程构建新镜像即可。
 
-- `N8N_PYTHON_PACKAGES="pandas==2.2.3 openpyxl==3.1.5"`
+### 5.2 临时覆盖（不改列表）：设置 build arg `COMMUNITY_NODES`
 
-然后重启容器即可。
+两种方式任选：
 
-### 3) 新增/升级系统工具/CLI（kubectl/helm/terraform/自研二进制）= 必须重建镜像
+- 修改 `config/build.env`：
+  - `COMMUNITY_NODES="n8n-nodes-python@0.1.4 n8n-nodes-ntfy@0.1.7"`
+- 或构建时直接传入（Linux/macOS）：
+  - `COMMUNITY_NODES="..." ./scripts/build.sh`
 
-做法：修改 `Dockerfile` 的系统工具安装段（apt/apk），固定版本（如可行）并构建新 tag。该类工具属于“镜像能力”，不建议运行中临时安装。
+### 5.3 为什么需要“启动时同步”
 
-### 4) 环境变量/镜像源为什么说“一次配置长期复用”
+你们通常会把 `/home/node/.n8n` 挂载为 volume 做持久化，这会覆盖镜像构建期写入的 `/home/node/.n8n/nodes`。
 
-- **pip 源**：写在 `config/n8n-super.env`（`N8N_PIP_INDEX_URL`/`N8N_PIP_TRUSTED_HOST`），容器启动与 python wrapper 都会加载并映射到 `PIP_*`。
-- **build 时 pip 源**：写在 `config/build.env` 的 `PIP_*`，用于构建期预装基础依赖（例如 `config/requirements.txt` 的预装）。
-- 结论：你们只需要把公司内网 pip 源在这两处配置好，后续新增 Python 包只改 requirements/变量，无需频繁折腾环境。
+因此 Dockerfile 会把构建期安装的节点备份到 `/opt/n8n-super-prebuilt-nodes`，启动脚本 `docker-entrypoint-extra.sh` 会在首次启动时同步到 volume 内，确保 UI 能加载到社区节点。
 
-### 5) 发版 tag 规范（rN 递增）
+---
 
-建议把镜像 tag 固定成“可回滚”的形式：
+## 6. 如何新增/升级 Python 依赖（requests/pandas/…）
+
+### 6.1 基础机制
+
+- 构建期会创建基础 venv：`/opt/n8n-python-venv`
+  - 预装 `python-fire`
+  - 预装 `config/requirements.txt`（用于团队常用包，提升首次运行体验）
+- 运行期执行 `python3` 时会走 `n8n-python3-wrapper.sh`
+  - 根据 `N8N_PYTHON_REQUIREMENTS_FILE` + `N8N_PYTHON_PACKAGES` + pip 源参数计算 hash
+  - 在 `N8N_PYTHON_VENV_CACHE_DIR/<hash>` 创建/复用独立 venv（互不污染）
+
+### 6.2 团队统一依赖（推荐）
+
+- 编辑 `config/requirements.txt`
+- 构建并发布新镜像（建议走 tag 递增）
+
+说明：
+
+- `config/requirements.txt` 会在构建期预装到基础 venv（`/opt/n8n-python-venv`），适合离线/新手环境。
+- 运行期如仍需额外依赖，可继续使用 `N8N_PYTHON_PACKAGES` 或 `N8N_PYTHON_REQUIREMENTS_FILE` 触发 hash-venv 安装。
+
+### 6.3 临时给某个实例加包（不改镜像）
+
+- 在运行环境设置：`N8N_PYTHON_PACKAGES="pandas==2.2.3 openpyxl==3.1.5"`
+- 并确保：
+  - `N8N_PYTHON_AUTO_INSTALL=true`
+  - `N8N_PYTHON_VENV_CACHE_DIR` 有写权限
+
+### 6.4 venv 缓存清理（可选）
+
+启动时可按 TTL 清理缓存目录：
+
+- `N8N_PYTHON_VENV_CACHE_CLEANUP=true`
+- `N8N_PYTHON_VENV_CACHE_TTL_DAYS=30`
+
+建议在低峰期重启执行，TTL 不当可能误删正在使用的 venv。
+
+---
+
+## 7. 如何新增/升级系统工具 / CLI
+
+建议把系统工具作为“镜像能力”固化在 Dockerfile：
+
+- Debian 系列：`apt-get install ...`
+- Alpine 系列：`apk add ...`
+
+实践建议：
+
+- 尽量固定版本（或至少固定上游镜像版本）
+- 企业内网建议走制品库/代理源，并做校验（sha256）
+
+---
+
+## 8. 发版与回滚（镜像 tag 管理）
+
+推荐 tag 规范：
 
 - `n8n-super:<n8nVersion>-rN`
   - 示例：`n8n-super:1.78.1-r1`、`n8n-super:1.78.1-r2`
 
-约定：
+典型流程：
 
-- `<n8nVersion>`：上游 n8n 基础版本（对应 `Dockerfile` 的 `FROM n8nio/n8n:<version>`）
-- `rN`：你们团队在该基础版本上的第 N 次发布，**只允许递增**
+1) 修改：`Dockerfile` / `config/community-nodes.list` / `config/requirements.txt`
+2) 构建新 tag：
+   - Linux/macOS：`./scripts/build.sh --tag n8n-super:1.78.1-r2`
+   - Windows：`.\windows\build.ps1 -Tag "n8n-super:1.78.1-r2"`
+3) 将部署侧 `docker-compose.yml` / `docker-compose-queue.yml` 里的 `image:` 改为新 tag
+4) 启动时强制重建容器（确保新 tag 生效）：
+   - Linux/macOS：`./scripts/run.sh --no-build --force-recreate`
+   - Windows：`.\windows\run.ps1 -NoBuild -ForceRecreate`
 
-### 6) 回滚策略（只要换回 tag + 强制重建容器）
+回滚：把 `image:` 换回旧 tag，再 `--force-recreate`。
 
-回滚的前提是：你们每次发布都保留旧 tag（不要覆盖）。回滚动作统一为：
+### 8.1 发布时你需要改哪几处
 
-1) 把部署侧使用的镜像 tag 改回上一个稳定版本（例如从 `1.78.1-r3` 回到 `1.78.1-r2`）
-2) 强制重建容器（确保新 tag 生效）
-   - Linux/macOS：
-     - `./scripts/run.sh --force-recreate`
-     - Queue：`./scripts/run.sh --queue --force-recreate`
-   - Windows：
-     - `.\windows\run.ps1 -ForceRecreate`
-     - Queue：`.\windows\run.ps1 -Queue -ForceRecreate`
+发布新版本时，建议你始终遵循下面的“最小改动面”原则：
 
-### 7) 变更记录模板（建议每次发版必填）
+- **改动功能**：只改 `Dockerfile` / `config/community-nodes.list` / `config/requirements.txt`
+- **改动版本**：只改 `docker-compose.yml`、`docker-compose-queue.yml` 里的 `image:` tag（或由部署系统注入）
 
-你可以把下面这段复制到你们的 PR/工单/发版记录中：
+### 8.2 建议的发布验收清单（Checklist）
 
-```text
-[release]
-tag: n8n-super:1.78.1-rN
-date: YYYY-MM-DD
-owner: <name>
+- `./scripts/test.sh` / `.\windows\test.ps1` 全绿
+- UI 能看到社区节点（尤其是 `n8n-nodes-python`、`n8n-nodes-dingtalk`、`n8n-nodes-browser`）
+- 执行一次 `workflows/n8n-super-full-test.json`（只要能跑过关键节点即可）
+- 生产环境确认：是否真的需要 `NODES_EXCLUDE: "[]"`（启用 `Execute Command`）
 
-changes:
-- community_nodes:
-  - added: <pkg@ver>, <pkg@ver>
-  - updated: <pkg@oldver -> pkg@newver>
-  - removed: <pkg@ver>
-- python_requirements:
-  - added: <pkg==ver>
-  - updated: <pkg==oldver -> pkg==newver>
-  - removed: <pkg==ver>
-- tools:
-  - added/updated: <tool@ver or url>
+---
 
-build:
-- build_env:
-  - ARGOCD_VERSION=<...>
-  - COMMUNITY_NODES=<...>
-  - PIP_INDEX_URL=<...>
+## 9. 升级 n8n 基础版本（n8nio/n8n）
 
-verification:
-- single:
-  - healthz: ok
-  - n8n --version: <...>
-  - argocd version --client: <...>
-- queue:
-  - healthz: ok
-  - web/worker/webhook: ok
+这是最常见但也最敏感的变更类型之一（兼容性/数据迁移/节点行为可能变化）。建议你按下面步骤做：
 
-rollback:
-- previous_tag: n8n-super:1.78.1-r(N-1)
-- command: run.sh --force-recreate (or --queue)
-```
+1) 改 `Dockerfile`
+   - 把 `FROM n8nio/n8n:1.78.1` 改为目标版本（例如 `1.79.0`）
+2) 重新构建新 tag
+   - Linux/macOS：`./scripts/build.sh --tag n8n-super:1.79.0-r1`
+   - Windows：`.\windows\build.ps1 -Tag "n8n-super:1.79.0-r1"`
+3) 更新 compose 使用的镜像 tag
+   - `docker-compose.yml` 的 `image:`
+   - `docker-compose-queue.yml` 的 `image:`（web/worker/webhook）
+4) 强制重建容器
+   - Linux/macOS：`./scripts/run.sh --no-build --force-recreate`
+   - Windows：`.\windows\run.ps1 -NoBuild -ForceRecreate`
+5) 跑自检
+   - Linux/macOS：`./scripts/test.sh`
+   - Windows：`.\windows\test.ps1`
 
-## （升级 / 启动 / 自检 / Queue / 回滚）
+建议：
 
-### Linux/macOS
+- 先在测试环境演练一次升级与回滚
+- 如果你从 SQLite 迁移到 Postgres，优先在 Queue 模式上做（避免“边跑边迁移”的复杂性）
 
-```bash
-chmod +x ./scripts/build.sh ./scripts/run.sh ./scripts/test.sh
+---
 
-./scripts/build.sh
-./scripts/run.sh --force-recreate
-./scripts/test.sh
+## 10. 常见场景：我到底要改哪里（按场景给最短路径）
 
-./scripts/run.sh --queue --force-recreate
-./scripts/test.sh --queue
-```
+### 10.1 我想新增一个社区节点
 
-### Windows PowerShell
+你只需要：
 
-```powershell
-cd d:\job-test\n8n-best\n8n-super
+1) 改 `config/community-nodes.list`
+   - 每行一个包名，建议固定版本
+2) 构建新镜像 tag
+3) 更新 `docker-compose*.yml` 的 `image:` 并 `--force-recreate`
 
-.\windows\build.ps1
-.\windows\run.ps1 -ForceRecreate
-.\windows\test.ps1
+说明：
 
-.\windows\run.ps1 -Queue -ForceRecreate
-.\windows\test.ps1 -Queue
-```
+- Dockerfile 构建期会把节点安装到 `/home/node/.n8n/nodes`，并备份到 `/opt/n8n-super-prebuilt-nodes`
+- 启动时 `docker-entrypoint-extra.sh` 会把备份同步到 volume（否则 volume 会覆盖构建期安装目录）
 
-### 回滚/重建要点
+### 10.2 我想新增一个系统工具（kubectl/helm/terraform/自研二进制）
 
-- **镜像更新但容器没换**：加 `--force-recreate`（Windows 对应 `-ForceRecreate`）。
-- **使用已发布 tag**：加 `--pull`（Windows 对应 `-Pull`）。
+你只需要：
 
-## 安全提示
+1) 改 `Dockerfile` 的系统包安装段（apt/apk）
+2) 构建新 tag
+3) 更新 `docker-compose*.yml` 的 `image:` 并 `--force-recreate`
 
-- `docker-compose.yml` 中 `NODES_EXCLUDE: "[]"` 会启用 `Command` 节点（可执行任意命令）。生产使用请结合权限、网络隔离与审计。
+### 10.3 我想让某条 workflow 临时多装几个 Python 包（不改镜像）
 
-## FAQ
+你只需要：
 
-- **Queue 文件名**：本仓库 Queue 编排为 `docker-compose-queue.yml`。
-- **容器异常**：先看 `docker logs --tail 200 <container>`。
+1) 在运行环境设置：
+   - `N8N_PYTHON_AUTO_INSTALL=true`
+   - `N8N_PYTHON_PACKAGES="xxx==1.2.3 yyy==4.5.6"`
+2) 重启容器（或至少确保新的环境变量生效）
+
+注意：
+
+- 这会按“依赖集合 hash”生成独立 venv 缓存目录，互不污染
+- 该方式更适合“个别 workflow 临时依赖”，不建议把所有业务依赖都塞成全局默认
+
+### 10.4 我想把团队通用 Python 包固化到镜像（提升首次运行体验）
+
+你只需要：
+
+1) 改 `config/requirements.txt`
+2) 构建新 tag
+3) 更新 `docker-compose*.yml` 的 `image:` 并 `--force-recreate`
+
+建议：
+
+- 本仓库选择“离线/新手友好”的策略：团队默认依赖允许维持较大集合（减少运行期下载失败/提升首次运行体验）。
+- 如果你后续要做“生产瘦身”，再把大依赖从 `config/requirements.txt` 迁移到运行期按需（`N8N_PYTHON_PACKAGES`）即可。
+
+### 10.5 我只是想换一个 argocd 版本
+
+你只需要：
+
+1) 改 `config/build.env` 的 `ARGOCD_VERSION`
+2) 构建新 tag
+3) 更新 `docker-compose*.yml` 的 `image:` 并 `--force-recreate`
+
+---
+
+## 11. 自检（验收镜像是否可用）
+
+- Linux/macOS：`./scripts/test.sh`
+- Windows：`.\windows\test.ps1`
+
+自检覆盖：
+
+- `/healthz` 可用
+- `n8n --version`
+- `argocd version --client`
+- `/opt/n8n-python-venv` 内 `python-fire` 可导入
+- `n8n-nodes-python` 包存在
+
+---
+
+## 10. 安全提示（生产必看）
+
+- `docker-compose.yml` 里 `NODES_EXCLUDE: "[]"` 会启用 `Execute Command`。
+- 该能力可执行任意命令，生产环境建议：
+  - 网络隔离（只允许访问必要内网系统）
+  - 最小权限运行
+  - 强制审计（执行记录 + 外部日志）
+  - 高风险动作优先走“受控执行器”（Jenkins/AWX/自研 Agent），n8n 做控制面与编排
