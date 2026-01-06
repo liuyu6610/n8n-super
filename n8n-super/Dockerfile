@@ -15,7 +15,8 @@
 # - 安装更多 CLI：kubectl/helm/terraform 等（建议固定版本并校验）
 # - 安装更多社区节点：在 npm install 行追加 n8n-nodes-xxx
 # - 安全：生产环境谨慎启用 Command 节点，建议配合隔离与权限控制
-FROM n8nio/n8n:1.78.1
+ARG N8N_BASE_IMAGE=n8nio/n8n:1.78.1
+FROM ${N8N_BASE_IMAGE}
 
 # 切到 root：安装系统依赖、写入 /usr/local/bin、创建 venv 等需要 root 权限
 USER root
@@ -122,7 +123,7 @@ ARG PIP_INDEX_URL
 ARG PIP_EXTRA_INDEX_URL
 ARG PIP_TRUSTED_HOST
 ARG PIP_DEFAULT_TIMEOUT
-RUN set -eux; \
+ RUN set -eux; \
   if command -v apk >/dev/null 2>&1; then \
     virtualenv -p python3 "${N8N_PYTHON_VENV}"; \
   else \
@@ -130,8 +131,10 @@ RUN set -eux; \
   fi; \
   # 升级 pip 工具链，避免老版本 pip 的兼容性问题
   "${N8N_PYTHON_VENV}/bin/pip" install --no-cache-dir --upgrade pip setuptools wheel; \
-  # PythonFunction 依赖 python-fire（基础必备），安装到基础 venv
-  "${N8N_PYTHON_VENV}/bin/pip" install --no-cache-dir python-fire; \
+  # PythonFunction 依赖 Google 的 fire（提供 fire.Fire），安装到基础 venv
+  "${N8N_PYTHON_VENV}/bin/pip" uninstall -y python-fire || true; \
+  "${N8N_PYTHON_VENV}/bin/pip" install --no-cache-dir --upgrade "fire==0.6.0"; \
+  "${N8N_PYTHON_VENV}/bin/python" -c "import fire; assert hasattr(fire, 'Fire'), 'fire.Fire missing'"; \
   # Preinstall team common python deps into base venv (visible to isolated venv via --system-site-packages)
   if [ -f /opt/n8n-super-requirements.txt ]; then \
     PIP_INDEX_URL="${PIP_INDEX_URL:-}" \

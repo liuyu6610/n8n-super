@@ -47,6 +47,7 @@ services:
     build:
       context: .
       args:
+        N8N_BASE_IMAGE: ${N8N_BASE_IMAGE:-n8nio/n8n:1.78.1}
         ARGOCD_VERSION: ${ARGOCD_VERSION:-v2.13.3}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-}
         PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
