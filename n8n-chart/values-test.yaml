@@ -1,0 +1,202 @@
+image:
+  repository: crpi-n5rumpjwbqinoz4c.cn-hangzhou.personal.cr.aliyuncs.com/n8nioliuyu/n8n
+  tag: "super-1.78.1"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+timezone: "Asia/Shanghai"
+
+log:
+  level: info
+  output:
+    - console
+
+# 测试环境：n8n-super 首次启动会把预置节点同步到 /home/node/.n8n（PVC），可能需要较长时间。
+# 若探针过早触发，会导致容器尚未监听 5678 就被 kubelet 杀掉（ExitCode 143 / CrashLoopBackOff）。
+# chart 模板会 merge main.*Probe 与顶层 *Probe，这里直接覆盖顶层探针以确保生效。
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 300
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 6
+
+readinessProbe:
+  httpGet:
+    path: /healthz/readiness
+    port: http
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 6
+
+existingEncryptionKeySecret: "n8n-test-secret"
+
+db:
+  type: postgresdb
+  postgresdb:
+    poolSize: 10
+    connectionTimeout: 20000
+    idleConnectionTimeout: 30000
+    schema: public
+    ssl:
+      enabled: false
+
+diagnostics:
+  enabled: false
+
+versionNotifications:
+  enabled: false
+
+api:
+  enabled: false
+  path: api
+  swagger:
+    enabled: false
+
+nodes:
+  builtin:
+    enabled: false
+    modules: []
+  external:
+    allowAll: false
+    reinstallMissingPackages: false
+    packages: []
+
+npmRegistry:
+  enabled: false
+  url: ""
+  secretName: ""
+  secretKey: "npmrc"
+  customNpmrc: ""
+
+main:
+  count: 1
+  editorBaseUrl: "http://n8n-it.saturn-res.ipa.zs"
+
+  extraEnvVars:
+    TZ: "Asia/Shanghai"
+    GENERIC_TIMEZONE: "Asia/Shanghai"
+    N8N_TRUST_PROXY: "true"
+    N8N_PROTOCOL: "http"
+    N8N_HOST: "n8n-it.saturn-res.ipa.zs"
+    N8N_PUSH_BACKEND: "websocket"
+    EXECUTIONS_MODE: "queue"
+
+  persistence:
+    enabled: true
+    mountPath: "/home/node/.n8n"
+    storageClass: "it"
+    size: 10Gi
+    accessMode: ReadWriteOnce
+
+  resources:
+    requests:
+      cpu: "200m"
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+worker:
+  mode: queue
+  count: 1
+  extraEnvVars:
+    TZ: "Asia/Shanghai"
+    GENERIC_TIMEZONE: "Asia/Shanghai"
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: "200m"
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+webhook:
+  mode: queue
+  count: 1
+  url: "http://n8n-it.saturn-res.ipa.zs/"
+  extraEnvVars:
+    TZ: "Asia/Shanghai"
+    GENERIC_TIMEZONE: "Asia/Shanghai"
+  resources:
+    requests:
+      cpu: "200m"
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  hosts:
+    - host: n8n-it.saturn-res.ipa.zs
+      paths:
+        - path: /
+          pathType: Prefix
+
+redis:
+  enabled: true
+  architecture: standalone
+  global:
+    imageRegistry: "nexus2.ipa.zs:5000"
+    security:
+      allowInsecureImages: true
+  image:
+    registry: "nexus2.ipa.zs:5000"
+    repository: bitnamilegacy/redis
+    tag: latest
+  auth:
+    enabled: true
+    existingSecret: "n8n-test-secret"
+  master:
+    persistence:
+      enabled: true
+      storageClass: "it"
+      size: 4Gi
+
+externalRedis:
+  existingSecret: "n8n-test-secret"
+  database: 0
+  host: ""
+  port: 6379
+
+postgresql:
+  enabled: true
+  architecture: standalone
+  global:
+    imageRegistry: "nexus2.ipa.zs:5000"
+    security:
+      allowInsecureImages: true
+  image:
+    registry: "nexus2.ipa.zs:5000"
+    repository: bitnamilegacy/postgresql
+    tag: latest
+  auth:
+    username: ""
+    database: "n8n"
+    existingSecret: "n8n-test-secret"
+  primary:
+    persistence:
+      enabled: true
+      storageClass: "it"
+      size: 20Gi
+
+externalPostgresql:
+  existingSecret: "n8n-test-secret"
+  host: ""
+  port: 5432
+  database: "n8n"
+
+serviceMonitor:
+  enabled: false
