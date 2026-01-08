@@ -27,7 +27,7 @@ spec:
     {{- end }}
   {{- end }}
 {{- end }}
-{{- if and .Values.worker.persistence.enabled (not .Values.worker.persistence.existingClaim) (eq (int .Values.worker.count) 1) }}
+{{- if and .Values.worker.persistence.enabled (not .Values.worker.persistence.existingClaim) (or (and (eq (int .Values.worker.count) 1) (not (eq .Values.worker.persistence.accessMode "ReadWriteMany"))) (eq .Values.worker.persistence.accessMode "ReadWriteMany")) }}
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
