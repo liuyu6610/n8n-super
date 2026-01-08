@@ -23,6 +23,14 @@ log:
 # - redis-password: Redis 密码
 existingEncryptionKeySecret: "n8n-one-secret"
 
+oneSecret:
+  enabled: true
+  name: "n8n-one-secret"
+  encryptionKey: ""
+  postgresPassword: ""
+  redisUsername: "default"
+  redisPassword: ""
+
 # n8n 数据库：使用 Postgres（生产推荐）
 db:
   type: postgresdb

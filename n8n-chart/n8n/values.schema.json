@@ -551,6 +551,45 @@
       "title": "existingEncryptionKeySecret",
       "type": "string"
     },
+    "oneSecret": {
+      "additionalProperties": false,
+      "description": "Unified Secret managed by this chart. When enabled, the chart will create (or reuse via lookup) a single Secret containing N8N_ENCRYPTION_KEY, postgres-password, redis-username, redis-password.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "n8n-one-secret",
+          "title": "name",
+          "type": "string"
+        },
+        "encryptionKey": {
+          "default": "",
+          "title": "encryptionKey",
+          "type": "string"
+        },
+        "postgresPassword": {
+          "default": "",
+          "title": "postgresPassword",
+          "type": "string"
+        },
+        "redisUsername": {
+          "default": "default",
+          "title": "redisUsername",
+          "type": "string"
+        },
+        "redisPassword": {
+          "default": "",
+          "title": "redisPassword",
+          "type": "string"
+        }
+      },
+      "required": ["enabled", "name", "encryptionKey", "postgresPassword", "redisUsername", "redisPassword"],
+      "title": "oneSecret",
+      "type": "object"
+    },
     "externalPostgresql": {
       "additionalProperties": false,
       "description": "External PostgreSQL parameters",

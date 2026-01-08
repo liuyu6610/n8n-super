@@ -35,6 +35,14 @@ readinessProbe:
 
 existingEncryptionKeySecret: "n8n-test-secret"
 
+oneSecret:
+  enabled: true
+  name: "n8n-test-secret"
+  encryptionKey: ""
+  postgresPassword: ""
+  redisUsername: "default"
+  redisPassword: ""
+
 db:
   type: postgresdb
   postgresdb:
