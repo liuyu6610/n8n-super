@@ -1,4 +1,4 @@
-{{- if and (eq .Values.db.type "postgresdb") (eq .Values.worker.mode "queue") (or (.Values.worker.forceToUseStatefulset) (and .Values.worker.persistence.enabled (gt (int .Values.worker.count) 1) (not .Values.worker.persistence.existingClaim) (eq .Values.worker.persistence.accessMode "ReadWriteOnce") (not .Values.worker.autoscaling.enabled))) }}
+{{- if and (not .Values.sharedPersistence.enabled) (eq .Values.db.type "postgresdb") (eq .Values.worker.mode "queue") (or (.Values.worker.forceToUseStatefulset) (and .Values.worker.persistence.enabled (gt (int .Values.worker.count) 1) (not .Values.worker.persistence.existingClaim) (eq .Values.worker.persistence.accessMode "ReadWriteOnce") (not .Values.worker.autoscaling.enabled))) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -290,11 +290,20 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
       {{- if eq .Values.taskRunners.mode "external" }}
+      {{- $trImageRepo := default .Values.image.repository .Values.taskRunners.external.image.repository }}
+      {{- $trImageTag := default (.Values.image.tag | default .Chart.AppVersion) .Values.taskRunners.external.image.tag }}
+      {{- $trImagePullPolicy := default .Values.image.pullPolicy .Values.taskRunners.external.image.pullPolicy }}
         - name: {{ template "n8n.taskRunners.name" . }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ $trImageRepo }}:{{ $trImageTag }}"
+          imagePullPolicy: {{ $trImagePullPolicy }}
+          {{- if and .Values.n8nSuper.enabled .Values.n8nSuper.sourceConfigFileInTaskRunner }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - {{ printf "set -a; [ -f %s ] && . %s; set +a; exec /usr/local/bin/task-runner-launcher javascript" .Values.n8nSuper.configFilePath .Values.n8nSuper.configFilePath | quote }}
+          {{- else }}
           command: ["/usr/local/bin/task-runner-launcher"]
           args: ["javascript"]
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.taskRunners.external.port }}
@@ -315,6 +324,14 @@ spec:
                 secretKeyRef:
                   name: {{ template "n8n.taskRunners.fullname" . }}-secret
                   key: worker-auth-token
+          {{- if .Values.n8nSuper.enabled }}
+            - name: N8N_SUPER_CONFIG_FILE
+              value: {{ .Values.n8nSuper.configFilePath | quote }}
+          {{- range $key, $value := .Values.n8nSuper.env }}
+            - name: {{ upper $key }}
+              value: {{ $value | quote }}
+          {{- end }}
+          {{- end }}
           {{- if .Values.nodes.builtin.enabled }}
             - name: NODE_FUNCTION_ALLOW_BUILTIN
               value: {{ if .Values.nodes.builtin.modules }}{{ join "," .Values.nodes.builtin.modules }}{{ else }}"*"{{ end }}

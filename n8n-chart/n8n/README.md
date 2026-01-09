@@ -10,6 +10,65 @@ A Helm chart for fair-code workflow automation platform with native AI capabilit
 
 For detailed usage instructions, configuration options, and additional information about the `n8n` Helm chart, refer to the [official documentation](https://community-charts.github.io/docs/charts/n8n/usage).
 
+## n8n-super：共享 PVC + 运行时 Python 环境（生产说明）
+
+本仓库对 Chart 增加了两类能力，用于让 **main/worker/webhook**（以及可选的 **task runner sidecar**）共享同一套 Python 运行时配置与依赖缓存，目标是：
+
+- **不重打镜像、不停机更新 Python 包**（通过 requirements.txt 变更触发新的 venv hash）。
+- **环境一致性**：主节点/worker/webhook 共享同一 PVC 下的 venv cache（例如 `/home/node/.n8n/pyenvs`）。
+
+### 1) sharedPersistence（共享 PVC）
+
+当 `sharedPersistence.enabled=true` 时：
+
+- Chart 会创建/复用 **一个共享 PVC**，并在 main/worker/webhook/mcp-webhook 统一挂载。
+- **注意**：共享 PVC 通常需要底层存储支持 **ReadWriteMany (RWX)**。如果 `storageClass` 不支持 RWX，Pod 可能会因挂载失败而无法启动。
+
+### 2) n8nSuper（统一配置文件与 requirements 挂载）
+
+当 `n8nSuper.enabled=true` 时：
+
+- Chart 会创建一个 ConfigMap，包含：
+  - `n8n-super.env`（挂载到 `n8nSuper.configFilePath`，默认 `/etc/n8n-super.env`）
+  - `requirements.txt`（挂载到 `{{ sharedPersistence.mountPath }}/requirements.txt`，默认 `/home/node/.n8n/requirements.txt`）
+- main/worker/webhook 容器会注入 `N8N_SUPER_CONFIG_FILE`，供 `docker-entrypoint-extra.sh` 在启动时 `source` 配置文件。
+
+### 3) Code 节点 Python / Execute Command 的差异与建议
+
+根据 n8n 官方文档：
+
+- Code 节点 **Native Python** 通过 **task runners** 执行（n8n >= 1.111.0）。
+  - 官方说明：
+    - Code node（Native Python）依赖 task runners：https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/
+    - Task runners 工作机制：https://docs.n8n.io/hosting/configuration/task-runners/
+  - 若要在 Code 节点里 `import` 第三方 Python 库，通常需要：
+    - 使用 `n8nio/runners`（或自定义 runners 镜像）并按官方要求做 allowlist（`N8N_RUNNERS_EXTERNAL_ALLOW` 等）：
+      https://docs.n8n.io/hosting/configuration/task-runners/ （Adding extra dependencies）
+- **Execute Command** 节点是在容器内执行命令（例如 `python3/pip/yq`），它依赖的是你部署的容器镜像与环境变量。
+  - 本仓库的 `n8n-super` 机制主要面向这条路径：统一 pip 源、requirements、venv cache 目录，并通过共享 PVC 实现多副本共享。
+
+为了让 task runner sidecar 与主容器使用同一份 `n8n-super.env`：
+
+- 设置 `n8nSuper.sourceConfigFileInTaskRunner=true`（将 runner 启动命令包一层 `sh -c` 并 `source` 配置文件）。
+
+### 4) 验证步骤（建议按顺序）
+
+- **验证 PVC 挂载**
+  - `kubectl -n <ns> get pvc | grep <release>`
+  - `kubectl -n <ns> describe pod <pod> | grep -n "Mounts" -A3`
+
+- **验证 n8n-super 配置文件已加载**
+  - `kubectl -n <ns> logs <pod> | grep "\[n8n-super\] Loading config file"`
+
+- **验证 venv cache 共享**（任选一个 Pod 执行）
+  - `kubectl -n <ns> exec -it <pod> -- sh -lc 'ls -lah /home/node/.n8n/pyenvs || true'`
+
+### 5) 回滚建议（快速止血）
+
+- **关闭共享 PVC**：`sharedPersistence.enabled=false`（回到原有 main/worker/webhook 各自策略）
+- **关闭 n8n-super**：`n8nSuper.enabled=false`（回到不注入 pip/python 运行时配置）
+- 若因 RWX 不支持导致 Pod 起不来：优先切换到支持 RWX 的 `storageClass` 或关闭 `sharedPersistence`。
+
 ## Get Helm Repository Info
 
 ```console

@@ -1,4 +1,4 @@
-{{- if and (not .Values.main.forceToUseStatefulset) (or (not .Values.main.persistence.enabled) (and .Values.main.persistence.enabled (or (eq (int .Values.main.count) 1) (eq .Values.main.persistence.accessMode "ReadWriteMany"))) ) }}
+{{- if and (not .Values.main.forceToUseStatefulset) (or .Values.sharedPersistence.enabled (not .Values.main.persistence.enabled) (and .Values.main.persistence.enabled (or (eq (int .Values.main.count) 1) (eq .Values.main.persistence.accessMode "ReadWriteMany"))) ) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -125,6 +125,14 @@ spec:
               value: {{ .Values.timezone | quote }}
             - name: N8N_GRACEFUL_SHUTDOWN_TIMEOUT
               value: {{ .Values.gracefulShutdownTimeout | quote }}
+          {{- if .Values.n8nSuper.enabled }}
+            - name: N8N_SUPER_CONFIG_FILE
+              value: {{ .Values.n8nSuper.configFilePath | quote }}
+          {{- range $key, $value := .Values.n8nSuper.env }}
+            - name: {{ upper $key }}
+              value: {{ $value | quote }}
+          {{- end }}
+          {{- end }}
           {{- if .Values.main.editorBaseUrl }}
             - name: N8N_EDITOR_BASE_URL
               value: {{ .Values.main.editorBaseUrl | quote }}
@@ -257,13 +265,27 @@ spec:
           {{- if or (eq (include "n8n.main.hasVolumeMounts" .) "true") .Values.main.persistence.enabled }}
           volumeMounts:
           {{- end }}
-          {{- if and (or .Values.nodes.external.packages .Values.main.persistence.enabled) (eq .Values.taskRunners.mode "internal") }}
-            - name: {{ default "node-modules" .Values.main.persistence.volumeName }}
-              mountPath: {{ .Values.main.persistence.mountPath }}
-              {{- if .Values.main.persistence.subPath }}
+          {{- if and (or .Values.nodes.external.packages .Values.main.persistence.enabled .Values.sharedPersistence.enabled) (eq .Values.taskRunners.mode "internal") }}
+            - name: {{- if .Values.sharedPersistence.enabled -}}{{ include "n8n.sharedPersistence.volumeName" . }}{{- else -}}{{ default "node-modules" .Values.main.persistence.volumeName }}{{- end }}
+              mountPath: {{- if .Values.sharedPersistence.enabled -}}{{ include "n8n.sharedPersistence.mountPath" . }}{{- else -}}{{ .Values.main.persistence.mountPath }}{{- end }}
+              {{- if .Values.sharedPersistence.enabled }}
+              {{- if (include "n8n.sharedPersistence.subPath" .) }}
+              subPath: {{ include "n8n.sharedPersistence.subPath" . }}
+              {{- end }}
+              {{- else if .Values.main.persistence.subPath }}
               subPath: {{ .Values.main.persistence.subPath }}
               {{- end }}
               readOnly: false
+          {{- end }}
+          {{- if .Values.n8nSuper.enabled }}
+            - name: n8n-super-files
+              mountPath: {{ .Values.n8nSuper.configFilePath | quote }}
+              subPath: n8n-super.env
+              readOnly: true
+            - name: n8n-super-files
+              mountPath: {{ printf "%s/requirements.txt" (include "n8n.sharedPersistence.mountPath" .) | quote }}
+              subPath: requirements.txt
+              readOnly: true
           {{- end }}
           {{- if and .Values.nodes.external.packages (eq .Values.taskRunners.mode "internal") }}
             - name: community-node-modules
@@ -292,11 +314,20 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
       {{- if eq .Values.taskRunners.mode "external" }}
+      {{- $trImageRepo := default .Values.image.repository .Values.taskRunners.external.image.repository }}
+      {{- $trImageTag := default (.Values.image.tag | default .Chart.AppVersion) .Values.taskRunners.external.image.tag }}
+      {{- $trImagePullPolicy := default .Values.image.pullPolicy .Values.taskRunners.external.image.pullPolicy }}
         - name: {{ template "n8n.taskRunners.name" . }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ $trImageRepo }}:{{ $trImageTag }}"
+          imagePullPolicy: {{ $trImagePullPolicy }}
+          {{- if and .Values.n8nSuper.enabled .Values.n8nSuper.sourceConfigFileInTaskRunner }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - {{ printf "set -a; [ -f %s ] && . %s; set +a; exec /usr/local/bin/task-runner-launcher javascript" .Values.n8nSuper.configFilePath .Values.n8nSuper.configFilePath | quote }}
+          {{- else }}
           command: ["/usr/local/bin/task-runner-launcher"]
           args: ["javascript"]
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.taskRunners.external.port }}
@@ -317,6 +348,14 @@ spec:
                 secretKeyRef:
                   name: {{ template "n8n.taskRunners.fullname" . }}-secret
                   key: auth-token
+          {{- if .Values.n8nSuper.enabled }}
+            - name: N8N_SUPER_CONFIG_FILE
+              value: {{ .Values.n8nSuper.configFilePath | quote }}
+          {{- range $key, $value := .Values.n8nSuper.env }}
+            - name: {{ upper $key }}
+              value: {{ $value | quote }}
+          {{- end }}
+          {{- end }}
           {{- if .Values.nodes.builtin.enabled }}
             - name: NODE_FUNCTION_ALLOW_BUILTIN
               value: {{ if .Values.nodes.builtin.modules }}{{ join "," .Values.nodes.builtin.modules }}{{ else }}"*"{{ end }}
@@ -335,14 +374,28 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ template "n8n.taskRunners.fullname" . }}-configmap
-          {{- if or .Values.nodes.external.packages .Values.main.persistence.enabled }}
+          {{- if or .Values.nodes.external.packages .Values.main.persistence.enabled .Values.sharedPersistence.enabled }}
           volumeMounts:
-            - name: {{ default "node-modules" .Values.main.persistence.volumeName }}
-              mountPath: {{ .Values.main.persistence.mountPath }}
-              {{- if .Values.main.persistence.subPath }}
+            - name: {{- if .Values.sharedPersistence.enabled -}}{{ include "n8n.sharedPersistence.volumeName" . }}{{- else -}}{{ default "node-modules" .Values.main.persistence.volumeName }}{{- end }}
+              mountPath: {{- if .Values.sharedPersistence.enabled -}}{{ include "n8n.sharedPersistence.mountPath" . }}{{- else -}}{{ .Values.main.persistence.mountPath }}{{- end }}
+              {{- if .Values.sharedPersistence.enabled }}
+              {{- if (include "n8n.sharedPersistence.subPath" .) }}
+              subPath: {{ include "n8n.sharedPersistence.subPath" . }}
+              {{- end }}
+              {{- else if .Values.main.persistence.subPath }}
               subPath: {{ .Values.main.persistence.subPath }}
               {{- end }}
               readOnly: false
+          {{- if .Values.n8nSuper.enabled }}
+            - name: n8n-super-files
+              mountPath: {{ .Values.n8nSuper.configFilePath | quote }}
+              subPath: n8n-super.env
+              readOnly: true
+            - name: n8n-super-files
+              mountPath: {{ printf "%s/requirements.txt" (include "n8n.sharedPersistence.mountPath" .) | quote }}
+              subPath: requirements.txt
+              readOnly: true
+          {{- end }}
           {{- end }}
           {{- if .Values.nodes.external.packages }}
             - name: community-node-modules
@@ -356,13 +409,22 @@ spec:
       {{- if or .Values.main.persistence.enabled (eq (include "n8n.main.hasVolumes" .) "true") }}
       volumes:
       {{- end }}
-      {{- if .Values.main.persistence.enabled }}
+      {{- if .Values.sharedPersistence.enabled }}
+        - name: {{ include "n8n.sharedPersistence.volumeName" . }}
+          persistentVolumeClaim:
+            claimName: {{ include "n8n.sharedPersistence.claimName" . }}
+      {{- else if .Values.main.persistence.enabled }}
         - name: {{ default "node-modules" .Values.main.persistence.volumeName }}
           persistentVolumeClaim:
             claimName: {{ default (include "n8n-main.persistence.fullname" .) .Values.main.persistence.existingClaim }}
       {{- else if .Values.nodes.external.packages }}
         - name: {{ default "node-modules" .Values.main.persistence.volumeName }}
           emptyDir: {}
+      {{- end }}
+      {{- if .Values.n8nSuper.enabled }}
+        - name: n8n-super-files
+          configMap:
+            name: {{ include "n8n.n8nSuper.filesConfigMapName" . }}
       {{- end }}
       {{- if .Values.nodes.external.packages }}
         - name: community-node-modules

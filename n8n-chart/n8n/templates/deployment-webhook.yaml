@@ -124,6 +124,14 @@ spec:
               value: {{ .Values.timezone | quote }}
             - name: N8N_GRACEFUL_SHUTDOWN_TIMEOUT
               value: {{ .Values.gracefulShutdownTimeout | quote }}
+          {{- if .Values.n8nSuper.enabled }}
+            - name: N8N_SUPER_CONFIG_FILE
+              value: {{ .Values.n8nSuper.configFilePath | quote }}
+          {{- range $key, $value := .Values.n8nSuper.env }}
+            - name: {{ upper $key }}
+              value: {{ $value | quote }}
+          {{- end }}
+          {{- end }}
             - name: N8N_DISABLE_UI
               value: "true"
           {{- if .Values.webhook.url }}
@@ -198,6 +206,24 @@ spec:
           {{- if eq (include "n8n.webhook.hasVolumeMounts" .) "true" }}
           volumeMounts:
           {{- end }}
+          {{- if .Values.sharedPersistence.enabled }}
+            - name: {{ include "n8n.sharedPersistence.volumeName" . }}
+              mountPath: {{ include "n8n.sharedPersistence.mountPath" . }}
+              {{- if (include "n8n.sharedPersistence.subPath" .) }}
+              subPath: {{ include "n8n.sharedPersistence.subPath" . }}
+              {{- end }}
+              readOnly: false
+          {{- end }}
+          {{- if .Values.n8nSuper.enabled }}
+            - name: n8n-super-files
+              mountPath: {{ .Values.n8nSuper.configFilePath | quote }}
+              subPath: n8n-super.env
+              readOnly: true
+            - name: n8n-super-files
+              mountPath: {{ printf "%s/requirements.txt" (include "n8n.sharedPersistence.mountPath" .) | quote }}
+              subPath: requirements.txt
+              readOnly: true
+          {{- end }}
           {{- if eq (include "n8n.postgres.ssl.hasCA" .) "true" }}
             - name: pg-ssl-ca
               mountPath: /home/node/certs/ca/ca.crt
@@ -224,6 +250,16 @@ spec:
       {{- end }}
       {{- if eq (include "n8n.webhook.hasVolumes" .) "true" }}
       volumes:
+      {{- end }}
+      {{- if .Values.sharedPersistence.enabled }}
+        - name: {{ include "n8n.sharedPersistence.volumeName" . }}
+          persistentVolumeClaim:
+            claimName: {{ include "n8n.sharedPersistence.claimName" . }}
+      {{- end }}
+      {{- if .Values.n8nSuper.enabled }}
+        - name: n8n-super-files
+          configMap:
+            name: {{ include "n8n.n8nSuper.filesConfigMapName" . }}
       {{- end }}
       {{- if eq (include "n8n.postgres.ssl.hasCA" .) "true" }}
         - name: pg-ssl-ca

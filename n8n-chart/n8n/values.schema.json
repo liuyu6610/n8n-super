@@ -132,6 +132,122 @@
       "title": "binaryData",
       "type": "object"
     },
+    "sharedPersistence": {
+      "additionalProperties": false,
+      "description": "Shared persistent volume claim configuration for main/worker/webhook pods.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "required": [],
+          "title": "enabled",
+          "type": "boolean"
+        },
+        "existingClaim": {
+          "default": "",
+          "required": [],
+          "title": "existingClaim",
+          "type": "string"
+        },
+        "mountPath": {
+          "default": "",
+          "required": [],
+          "title": "mountPath",
+          "type": "string"
+        },
+        "subPath": {
+          "default": "",
+          "required": [],
+          "title": "subPath",
+          "type": "string"
+        },
+        "volumeName": {
+          "default": "",
+          "required": [],
+          "title": "volumeName",
+          "type": "string"
+        },
+        "storageClass": {
+          "default": "",
+          "required": [],
+          "title": "storageClass",
+          "type": "string"
+        },
+        "accessMode": {
+          "default": "ReadWriteMany",
+          "required": [],
+          "title": "accessMode",
+          "type": "string",
+          "enum": ["ReadWriteOnce", "ReadWriteMany"]
+        },
+        "size": {
+          "default": "8Gi",
+          "required": [],
+          "title": "size",
+          "type": "string"
+        }
+      },
+      "required": ["enabled", "existingClaim", "mountPath", "subPath", "volumeName", "storageClass", "accessMode", "size"],
+      "title": "sharedPersistence",
+      "type": "object"
+    },
+    "n8nSuper": {
+      "additionalProperties": false,
+      "description": "n8n-super runtime configuration for mounting config files and injecting Python/pip environment variables.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "required": [],
+          "title": "enabled",
+          "type": "boolean"
+        },
+        "configFilePath": {
+          "default": "/etc/n8n-super.env",
+          "required": [],
+          "title": "configFilePath",
+          "type": "string"
+        },
+        "sourceConfigFileInTaskRunner": {
+          "default": false,
+          "description": "Whether to source the n8n-super config file in the external task runner sidecar container before starting the runner.",
+          "required": [],
+          "title": "sourceConfigFileInTaskRunner",
+          "type": "boolean"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Extra env vars injected into all n8n pods when n8nSuper is enabled.",
+          "required": [],
+          "title": "env",
+          "type": "object"
+        },
+        "files": {
+          "additionalProperties": false,
+          "properties": {
+            "n8nSuperEnv": {
+              "default": "",
+              "required": [],
+              "title": "n8nSuperEnv",
+              "type": "string"
+            },
+            "requirementsTxt": {
+              "default": "",
+              "required": [],
+              "title": "requirementsTxt",
+              "type": "string"
+            }
+          },
+          "required": ["n8nSuperEnv", "requirementsTxt"],
+          "title": "files",
+          "type": "object"
+        }
+      },
+      "required": ["enabled", "configFilePath", "sourceConfigFileInTaskRunner", "env", "files"],
+      "title": "n8nSuper",
+      "type": "object"
+    },
     "db": {
       "additionalProperties": false,
       "description": "n8n database configurations",
@@ -4075,6 +4191,33 @@
         "external": {
           "additionalProperties": false,
           "properties": {
+            "image": {
+              "additionalProperties": false,
+              "properties": {
+                "repository": {
+                  "default": "",
+                  "required": [],
+                  "title": "repository",
+                  "type": "string"
+                },
+                "tag": {
+                  "default": "",
+                  "required": [],
+                  "title": "tag",
+                  "type": "string"
+                },
+                "pullPolicy": {
+                  "default": "",
+                  "required": [],
+                  "title": "pullPolicy",
+                  "type": "string",
+                  "enum": ["Always", "IfNotPresent", "Never", ""]
+                }
+              },
+              "required": ["repository", "tag", "pullPolicy"],
+              "title": "image",
+              "type": "object"
+            },
             "mainNodeAuthToken": {
               "default": "",
               "description": "This sets the auth token for the n8n main node of the external task runner",
@@ -4150,7 +4293,7 @@
               "type": "object"
             }
           },
-          "required": ["autoShutdownTimeout", "port", "nodeOptions", "resources"],
+          "required": ["image", "autoShutdownTimeout", "port", "nodeOptions", "resources"],
           "title": "external",
           "type": "object"
         }

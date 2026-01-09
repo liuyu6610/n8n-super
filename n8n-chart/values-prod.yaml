@@ -98,6 +98,55 @@ main:
     size: 10Gi
     accessMode: ReadWriteOnce
 
+sharedPersistence:
+  enabled: true
+  existingClaim: ""
+  mountPath: "/home/node/.n8n"
+  subPath: ""
+  volumeName: "node-modules"
+  storageClass: "it"
+  accessMode: ReadWriteMany
+  size: 10Gi
+
+n8nSuper:
+  enabled: true
+  configFilePath: "/etc/n8n-super.env"
+  env: {}
+  files:
+    n8nSuperEnv: |-
+      # n8n-super 启动自定义配置（会被 /docker-entrypoint-extra.sh 在启动时加载）
+
+      # 公开 pip 镜像源（清华 TUNA）
+      N8N_PIP_INDEX_URL="${N8N_PIP_INDEX_URL:-}"
+      N8N_PIP_TRUSTED_HOST="${N8N_PIP_TRUSTED_HOST:-}"
+
+      # PythonFunction 运行时自动安装依赖
+      N8N_PYTHON_AUTO_INSTALL="${N8N_PYTHON_AUTO_INSTALL:-true}"
+
+      # 使用 requirements 文件方式（该文件会通过 docker-compose 挂载到容器内）
+      N8N_PYTHON_REQUIREMENTS_FILE="${N8N_PYTHON_REQUIREMENTS_FILE:-/home/node/.n8n/requirements.txt}"
+
+      # 多人/多工作流推荐：按依赖 hash 独立 venv 缓存目录
+      N8N_PYTHON_VENV_CACHE_DIR="${N8N_PYTHON_VENV_CACHE_DIR:-/home/node/.n8n/pyenvs}"
+
+      # 可选：启动时清理旧 venv 缓存（默认不清理）
+      # N8N_PYTHON_VENV_CACHE_CLEANUP="true"
+      # N8N_PYTHON_VENV_CACHE_TTL_DAYS="30"
+      PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-/usr/bin/chromium}"
+
+      # 如需额外 pip 参数（代理/额外源/证书等）可在此设置
+      # N8N_PYTHON_PIP_EXTRA_ARGS="${N8N_PYTHON_PIP_EXTRA_ARGS:-}"
+    requirementsTxt: |-
+      # 团队常用Python包（构建时预装到基础venv）
+      requests==2.32.3
+      PyYAML==6.0.2
+      pandas==2.2.3
+      numpy==2.2.3
+      python-gitlab==5.3.0
+      openpyxl==3.1.5
+      pytz==2025.1
+      python-dateutil==2.9.0
+
   resources:
     requests:
       cpu: "500m"
@@ -108,7 +157,7 @@ main:
 
 worker:
   mode: queue
-  count: 1
+  count: 10
   # worker 一般不需要持久化；如你的任务需要本地文件缓存/二进制落盘，可单独开启 worker.persistence
   extraEnvVars:
     TZ: "Asia/Shanghai"

@@ -1,4 +1,28 @@
-{{- if and .Values.main.persistence.enabled (not .Values.main.persistence.existingClaim) (not .Values.main.forceToUseStatefulset) (or (and (eq (int .Values.main.count) 1) (eq .Values.main.persistence.accessMode "ReadWriteOnce")) (and (gt (int .Values.main.count) 1) (eq .Values.main.persistence.accessMode "ReadWriteMany"))) }}
+{{- if and .Values.sharedPersistence.enabled (not .Values.sharedPersistence.existingClaim) }}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ include "n8n.sharedPersistence.claimName" . }}
+  labels:
+    {{- include "n8n-main.persistence.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ default .Values.main.persistence.accessMode .Values.sharedPersistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ default .Values.main.persistence.size .Values.sharedPersistence.size }}
+  {{- $storageClass := default .Values.main.persistence.storageClass .Values.sharedPersistence.storageClass }}
+  {{- if $storageClass }}
+    {{- if (eq "-" $storageClass) }}
+  storageClassName: ""
+    {{- else }}
+  storageClassName: {{ $storageClass | quote }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+
+{{- if and (not .Values.sharedPersistence.enabled) .Values.main.persistence.enabled (not .Values.main.persistence.existingClaim) (not .Values.main.forceToUseStatefulset) (or (and (eq (int .Values.main.count) 1) (eq .Values.main.persistence.accessMode "ReadWriteOnce")) (and (gt (int .Values.main.count) 1) (eq .Values.main.persistence.accessMode "ReadWriteMany"))) }}
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
@@ -27,7 +51,7 @@ spec:
     {{- end }}
   {{- end }}
 {{- end }}
-{{- if and .Values.worker.persistence.enabled (not .Values.worker.persistence.existingClaim) (eq (int .Values.worker.count) 1) }}
+{{- if and (not .Values.sharedPersistence.enabled) .Values.worker.persistence.enabled (not .Values.worker.persistence.existingClaim) (eq (int .Values.worker.count) 1) }}
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1

@@ -20,6 +20,17 @@
   echo "Visit http://127.0.0.1:8080 to use your application"
   kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
 {{- end }}
+
+2. n8n-super / Python runtime notes
+{{- if .Values.sharedPersistence.enabled }}
+  - sharedPersistence.enabled=true: all roles share one PVC. Make sure your StorageClass supports ReadWriteMany (RWX), otherwise pods may fail to start.
+{{- end }}
+{{- if .Values.n8nSuper.enabled }}
+  - n8nSuper.enabled=true: mounts config file {{ .Values.n8nSuper.configFilePath }} and requirements.txt as read-only.
+  - If taskRunners.mode=external and you want the runner sidecar to source the same config file, set n8nSuper.sourceConfigFileInTaskRunner=true.
+{{- end }}
+  - Code node Native Python uses task runners (n8n >= 1.111.0). Third-party Python libraries require runner allowlist and/or custom runner image.
+
 {{- $deprecatedFields := list "extraEnvVars" "extraSecretNamesForEnvFrom" "resources" "livenessProbe" "readinessProbe" "volumes" "volumeMounts" "affinity" }}
 {{- range $field := $deprecatedFields }}
   {{- $value := get $.Values $field }}
