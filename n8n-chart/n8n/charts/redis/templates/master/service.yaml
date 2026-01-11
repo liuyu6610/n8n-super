@@ -48,11 +48,6 @@ spec:
       targetPort: redis
       {{- if and (or (eq .Values.master.service.type "NodePort") (eq .Values.master.service.type "LoadBalancer")) .Values.master.service.nodePorts.redis}}
       nodePort: {{ .Values.master.service.nodePorts.redis}}
-<<<<<<< HEAD
-=======
-      {{- else if eq .Values.master.service.type "ClusterIP" }}
-      nodePort: null
->>>>>>> 9abfeee (change)
       {{- end }}
     {{- if .Values.master.service.extraPorts }}
     {{- include "common.tplvalues.render" (dict "value" .Values.master.service.extraPorts "context" $) | nindent 4 }}

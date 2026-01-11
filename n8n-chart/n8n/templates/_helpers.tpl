@@ -455,12 +455,47 @@ Check postgres ssl certificate file content exist or not
 {{- $internalResult -}}
 {{- end -}}
 
+ {{/*
+ Shared persistence claim name
+ */}}
+ {{- define "n8n.sharedPersistence.claimName" -}}
+ {{- default (include "n8n-main.persistence.fullname" .) .Values.sharedPersistence.existingClaim -}}
+ {{- end -}}
+
+ {{/*
+ Shared persistence mount path
+ */}}
+ {{- define "n8n.sharedPersistence.mountPath" -}}
+ {{- default .Values.main.persistence.mountPath .Values.sharedPersistence.mountPath -}}
+ {{- end -}}
+
+ {{/*
+ Shared persistence subPath
+ */}}
+ {{- define "n8n.sharedPersistence.subPath" -}}
+ {{- default "" .Values.sharedPersistence.subPath -}}
+ {{- end -}}
+
+ {{/*
+ Shared persistence volume name
+ */}}
+ {{- define "n8n.sharedPersistence.volumeName" -}}
+ {{- default "node-modules" .Values.sharedPersistence.volumeName -}}
+ {{- end -}}
+
+ {{/*
+ n8n-super files ConfigMap name
+ */}}
+ {{- define "n8n.n8nSuper.filesConfigMapName" -}}
+ {{- printf "%s-n8n-super-files" (include "n8n.fullname" .) | trunc 63 | trimSuffix "-" -}}
+ {{- end -}}
+
 {{/*
 Check if volumes should be included to main. If the context is not provided, result must be false
 */}}
 {{- define "n8n.main.hasVolumes" -}}
 {{- $hasVolumes := false -}}
-{{- if or .Values.volumes .Values.main.volumes .Values.nodes.external.packages .Values.npmRegistry.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
+{{- if or .Values.volumes .Values.main.volumes .Values.nodes.external.packages .Values.npmRegistry.enabled .Values.n8nSuper.enabled .Values.sharedPersistence.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
   {{- $hasVolumes = true -}}
 {{- end -}}
 {{- $hasVolumes -}}
@@ -471,7 +506,7 @@ Check if volumeMounts should be included to main. If the context is not provided
 */}}
 {{- define "n8n.main.hasVolumeMounts" -}}
 {{- $hasVolumeMounts := false -}}
-{{- if or .Values.volumeMounts .Values.main.volumeMounts .Values.nodes.external.packages .Values.npmRegistry.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
+{{- if or .Values.volumeMounts .Values.main.volumeMounts .Values.nodes.external.packages .Values.npmRegistry.enabled .Values.n8nSuper.enabled .Values.sharedPersistence.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
   {{- $hasVolumeMounts = true -}}
 {{- end -}}
 {{- $hasVolumeMounts -}}
@@ -482,7 +517,7 @@ Check if volumes should be included to worker. If the context is not provided, r
 */}}
 {{- define "n8n.worker.hasVolumes" -}}
 {{- $hasVolumes := false -}}
-{{- if or .Values.volumes .Values.worker.volumes .Values.nodes.external.packages .Values.npmRegistry.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
+{{- if or .Values.volumes .Values.worker.volumes .Values.nodes.external.packages .Values.npmRegistry.enabled .Values.n8nSuper.enabled .Values.sharedPersistence.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
   {{- $hasVolumes = true -}}
 {{- end -}}
 {{- $hasVolumes -}}
@@ -493,7 +528,7 @@ Check if volumeMounts should be included to worker. If the context is not provid
 */}}
 {{- define "n8n.worker.hasVolumeMounts" -}}
 {{- $hasVolumeMounts := false -}}
-{{- if or .Values.volumeMounts .Values.worker.volumeMounts .Values.nodes.external.packages .Values.npmRegistry.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
+{{- if or .Values.volumeMounts .Values.worker.volumeMounts .Values.nodes.external.packages .Values.npmRegistry.enabled .Values.n8nSuper.enabled .Values.sharedPersistence.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
   {{- $hasVolumeMounts = true -}}
 {{- end -}}
 {{- $hasVolumeMounts -}}
@@ -504,7 +539,7 @@ Check if volumes should be included to webhook. If the context is not provided, 
 */}}
 {{- define "n8n.webhook.hasVolumes" -}}
 {{- $hasVolumes := false -}}
-{{- if or .Values.volumes .Values.webhook.volumes (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
+{{- if or .Values.volumes .Values.webhook.volumes .Values.n8nSuper.enabled .Values.sharedPersistence.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
   {{- $hasVolumes = true -}}
 {{- end -}}
 {{- $hasVolumes -}}
@@ -515,7 +550,7 @@ Check if volumeMounts should be included to webhook. If the context is not provi
 */}}
 {{- define "n8n.webhook.hasVolumeMounts" -}}
 {{- $hasVolumeMounts := false -}}
-{{- if or .Values.volumeMounts .Values.webhook.volumeMounts (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
+{{- if or .Values.volumeMounts .Values.webhook.volumeMounts .Values.n8nSuper.enabled .Values.sharedPersistence.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
   {{- $hasVolumeMounts = true -}}
 {{- end -}}
 {{- $hasVolumeMounts -}}
@@ -526,7 +561,7 @@ Check if volumes should be included to MCP webhook. If the context is not provid
 */}}
 {{- define "n8n.mcp-webhook.hasVolumes" -}}
 {{- $hasVolumes := false -}}
-{{- if or .Values.volumes .Values.webhook.mcp.volumes (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
+{{- if or .Values.volumes .Values.webhook.mcp.volumes .Values.n8nSuper.enabled .Values.sharedPersistence.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
   {{- $hasVolumes = true -}}
 {{- end -}}
 {{- $hasVolumes -}}
@@ -537,7 +572,7 @@ Check if volumeMounts should be included to MCP webhook. If the context is not p
 */}}
 {{- define "n8n.mcp-webhook.hasVolumeMounts" -}}
 {{- $hasVolumeMounts := false -}}
-{{- if or .Values.volumeMounts .Values.webhook.mcp.volumeMounts (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
+{{- if or .Values.volumeMounts .Values.webhook.mcp.volumeMounts .Values.n8nSuper.enabled .Values.sharedPersistence.enabled (eq (include "n8n.postgres.ssl.hasFileInternal" .) "true") -}}
   {{- $hasVolumeMounts = true -}}
 {{- end -}}
 {{- $hasVolumeMounts -}}

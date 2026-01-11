@@ -1,20 +1,20 @@
-{{- if and (eq .Values.db.type "postgresdb") (eq .Values.worker.mode "queue") (or (.Values.worker.forceToUseStatefulset) (and .Values.worker.persistence.enabled (gt (int .Values.worker.count) 1) (not .Values.worker.persistence.existingClaim) (eq .Values.worker.persistence.accessMode "ReadWriteOnce") (not .Values.worker.autoscaling.enabled))) }}
+{{- if and (not .Values.sharedPersistence.enabled) (or (.Values.main.forceToUseStatefulset) (and .Values.main.persistence.enabled (gt (int .Values.main.count) 1) (not .Values.main.persistence.existingClaim) (eq .Values.main.persistence.accessMode "ReadWriteOnce"))) }}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "n8n.worker.fullname" . }}
+  name: {{ include "n8n.fullname" . }}
   labels:
-    {{- include "n8n.worker.labels" . | nindent 4 }}
+    {{- include "n8n.main.labels" . | nindent 4 }}
 spec:
   {{- if .Values.service.enabled }}
-  serviceName: {{ include "n8n.worker.fullname" . }}-headless
+  serviceName: {{ include "n8n.fullname" . }}-headless
   {{- end }}
-  replicas: {{ .Values.worker.count }}
+  replicas: {{ .Values.main.count }}
   updateStrategy:
     type: RollingUpdate
   selector:
     matchLabels:
-      {{- include "n8n.worker.selectorLabels" . | nindent 6 }}
+      {{- include "n8n.main.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -29,7 +29,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "n8n.worker.labels" . | nindent 8 }}
+        {{- include "n8n.main.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -41,38 +41,16 @@ spec:
       serviceAccountName: {{ include "n8n.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- with .Values.worker.hostAliases }}
+      {{- with .Values.main.hostAliases }}
       hostAliases:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if .Values.worker.runtimeClassName }}
-      runtimeClassName: {{ .Values.worker.runtimeClassName }}
+      {{- if .Values.main.runtimeClassName }}
+      runtimeClassName: {{ .Values.main.runtimeClassName }}
       {{- end }}
-      {{- if or .Values.worker.waitMainNodeReady.enabled .Values.nodes.external.packages .Values.worker.initContainers  }}
+      {{- if or .Values.main.initContainers .Values.nodes.external.packages }}
       initContainers:
       {{- end }}
-        {{- if .Values.worker.waitMainNodeReady.enabled }}
-        - name: wait-for-main
-          image: busybox:1.36
-          command: ["/bin/sh", "-c"]
-          args:
-          {{- $overwriteSchema := default (default "http" (get .Values.main.extraEnvVars "N8N_PROTOCOL")) .Values.worker.waitMainNodeReady.overwriteSchema }}
-          {{- $overwriteUrl := default (printf "%s.%s.svc.cluster.local:%d" (include "n8n.fullname" .) .Release.Namespace (.Values.service.port | int)) .Values.worker.waitMainNodeReady.overwriteUrl }}
-          {{- $healthCheckPath := default "/healthz" .Values.worker.waitMainNodeReady.healthCheckPath }}
-          {{- $additionalParameters := printf "--spider %s" (join " " .Values.worker.waitMainNodeReady.additionalParameters) | trimSuffix " " }}
-          - |
-            until wget -q {{ $additionalParameters }} {{ $overwriteSchema }}://{{ $overwriteUrl }}{{ $healthCheckPath }}; do
-              echo "Waiting for main node to be ready..."
-              sleep 2
-            done
-          resources:
-            requests:
-              cpu: "10m"
-              memory: "16Mi"
-            limits:
-              cpu: "100m"
-              memory: "64Mi"
-        {{- end }}
         {{- if .Values.nodes.external.packages }}
         - name: npm-install
           securityContext:
@@ -90,7 +68,7 @@ spec:
               subPath: {{ (default "npmrc" .Values.npmRegistry.secretKey) | quote }}
               readOnly: true
             {{- end }}
-            - name: {{ default "node-modules" .Values.worker.persistence.volumeName }}
+            - name: {{ default "node-modules" .Values.main.persistence.volumeName }}
               mountPath: "/npmdata"
               readOnly: false
             - name: community-node-modules
@@ -101,33 +79,35 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
         {{- end }}
-      {{- with .Values.worker.initContainers }}
+        {{- with .Values.main.initContainers }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       containers:
-        - name: {{ include "n8n.worker.name" . }}
+        - name: {{ include "n8n.main.name" . }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["n8n"]
-          args: ["worker", "--concurrency={{ .Values.worker.concurrency }}"]
+        {{- if and .Values.license.enabled (or (ne .Values.license.activationKey "") (ne .Values.license.existingActivationKeySecret "")) }}
+          command: ["/bin/sh"]
+          args:
+            - "-c"
+            - "n8n license:info && n8n"
+        {{- end }}
           ports:
             - name: {{ .Values.service.name }}
               containerPort: {{ .Values.service.port }}
               protocol: TCP
-          startupProbe:
-            {{- toYaml .Values.worker.startupProbe | nindent 12 }}
           livenessProbe:
             {{- $rootLiveness := .Values.livenessProbe | default dict }}
-            {{- $workerLiveness := .Values.worker.livenessProbe | default dict }}
-            {{- toYaml (merge $workerLiveness $rootLiveness) | nindent 12 }}
+            {{- $mainLiveness := .Values.main.livenessProbe | default dict }}
+            {{- toYaml (merge $mainLiveness $rootLiveness) | nindent 12 }}
           readinessProbe:
             {{- $rootReadiness := .Values.readinessProbe | default dict }}
-            {{- $workerReadiness := .Values.worker.readinessProbe | default dict }}
-            {{- toYaml (merge $workerReadiness $rootReadiness) | nindent 12 }}
+            {{- $mainReadiness := .Values.main.readinessProbe | default dict }}
+            {{- toYaml (merge $mainReadiness $rootReadiness) | nindent 12 }}
           resources:
-            {{- toYaml (default .Values.resources .Values.worker.resources) | nindent 12 }}
+            {{- toYaml (default .Values.resources .Values.main.resources) | nindent 12 }}
           env:
             - name: N8N_HIRING_BANNER_ENABLED
               value: "false"
@@ -143,12 +123,7 @@ spec:
               value: {{ .Values.timezone | quote }}
             - name: N8N_GRACEFUL_SHUTDOWN_TIMEOUT
               value: {{ .Values.gracefulShutdownTimeout | quote }}
-            - name: N8N_DISABLE_UI
-              value: "true"
-            - name: QUEUE_HEALTH_CHECK_ACTIVE
-              value: "true"
-            - name: N8N_CONCURRENCY_PRODUCTION_LIMIT
-              value: {{ .Values.worker.concurrency | quote }}
+          {{- if eq .Values.db.type "postgresdb" }}
             - name: DB_POSTGRESDB_USER
               value: {{ include "n8n.postgresql.username" . }}
             - name: DB_POSTGRESDB_PASSWORD
@@ -161,6 +136,7 @@ spec:
                   key: postgres-password
               {{- end }}
                   optional: true
+            {{- if eq .Values.worker.mode "queue" }}
             - name: QUEUE_BULL_REDIS_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -173,12 +149,22 @@ spec:
                   name: {{ default (include "n8n.redis.fullname" .) .Values.externalRedis.existingSecret }}
                   key: redis-password
                   optional: true
+            {{- end }}
+          {{- end }}
+          {{- if .Values.webhook.url }}
+            - name: WEBHOOK_URL
+              value: {{ .Values.webhook.url | quote }}
+          {{- end }}
           {{- if eq .Values.taskRunners.mode "external" }}
             - name: N8N_RUNNERS_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ template "n8n.taskRunners.fullname" . }}-secret
-                  key: worker-auth-token
+                  key: auth-token
+          {{- end }}
+          {{- if gt (int .Values.main.count) 1 }}
+            - name: N8N_MULTI_MAIN_SETUP_ENABLED
+              value: "true"
           {{- end }}
           {{- if has "s3" .Values.binaryData.availableModes }}
             - name: N8N_EXTERNAL_STORAGE_S3_ACCESS_KEY
@@ -217,7 +203,7 @@ spec:
             - name: N8N_REINSTALL_MISSING_PACKAGES
               value: "true"
           {{- end }}
-          {{- range $key, $value := (default .Values.extraEnvVars .Values.worker.extraEnvVars) }}
+          {{- range $key, $value := (default .Values.extraEnvVars .Values.main.extraEnvVars) }}
             - name: {{ upper $key }}
               value: {{ $value | quote }}
           {{- end }}
@@ -232,8 +218,12 @@ spec:
                 name: {{ template "n8n.fullname" . }}-version-notifications-configmap
             - configMapRef:
                 name: {{ template "n8n.fullname" . }}-public-api-configmap
+          {{- if and (eq .Values.db.type "postgresdb") (or (eq .Values.worker.mode "queue") (eq .Values.webhook.mode "queue")) }}
             - configMapRef:
                 name: {{ template "n8n.fullname" . }}-queue-configmap
+          {{- end }}
+            - configMapRef:
+                name: {{ template "n8n.fullname" . }}-workflow-history-configmap
             - configMapRef:
                 name: {{ template "n8n.fullname" . }}-task-broker-configmap
             - configMapRef:
@@ -248,18 +238,18 @@ spec:
           {{- end }}
             - secretRef:
                 name: {{ default (printf "%s-encryption-key-secret-v2" (include "n8n.fullname" .)) .Values.existingEncryptionKeySecret }}
-          {{- range (default .Values.extraSecretNamesForEnvFrom .Values.worker.extraSecretNamesForEnvFrom) }}
+          {{- range (default .Values.extraSecretNamesForEnvFrom .Values.main.extraSecretNamesForEnvFrom) }}
             - secretRef:
                 name: {{ . }}
           {{- end }}
-          {{- if or (eq (include "n8n.worker.hasVolumeMounts" .) "true") (eq .Values.taskRunners.mode "internal") }}
+          {{- if or (eq (include "n8n.main.hasVolumeMounts" .) "true") (eq .Values.taskRunners.mode "internal") }}
           volumeMounts:
           {{- end }}
           {{- if eq .Values.taskRunners.mode "internal" }}
-            - name: {{ default "node-modules" .Values.worker.persistence.volumeName }}
-              mountPath: {{ .Values.worker.persistence.mountPath }}
-              {{- if .Values.worker.persistence.subPath }}
-              subPath: {{ .Values.worker.persistence.subPath }}
+            - name: {{ default "node-modules" .Values.main.persistence.volumeName }}
+              mountPath: {{ .Values.main.persistence.mountPath }}
+              {{- if .Values.main.persistence.subPath }}
+              subPath: {{ .Values.main.persistence.subPath }}
               {{- end }}
               readOnly: false
           {{- end }}
@@ -286,15 +276,24 @@ spec:
               subPath: cert.key
               readOnly: true
           {{- end }}
-          {{- with (default .Values.volumeMounts .Values.worker.volumeMounts) }}
+          {{- with (default .Values.volumeMounts .Values.main.volumeMounts) }}
             {{- toYaml . | nindent 12 }}
           {{- end }}
       {{- if eq .Values.taskRunners.mode "external" }}
+      {{- $trImageRepo := default .Values.image.repository .Values.taskRunners.external.image.repository }}
+      {{- $trImageTag := default (.Values.image.tag | default .Chart.AppVersion) .Values.taskRunners.external.image.tag }}
+      {{- $trImagePullPolicy := default .Values.image.pullPolicy .Values.taskRunners.external.image.pullPolicy }}
         - name: {{ template "n8n.taskRunners.name" . }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ $trImageRepo }}:{{ $trImageTag }}"
+          imagePullPolicy: {{ $trImagePullPolicy }}
+          {{- if and .Values.n8nSuper.enabled .Values.n8nSuper.sourceConfigFileInTaskRunner }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - {{ printf "set -a; [ -f %s ] && . %s; set +a; exec /usr/local/bin/task-runner-launcher javascript" .Values.n8nSuper.configFilePath .Values.n8nSuper.configFilePath | quote }}
+          {{- else }}
           command: ["/usr/local/bin/task-runner-launcher"]
           args: ["javascript"]
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.taskRunners.external.port }}
@@ -314,7 +313,15 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ template "n8n.taskRunners.fullname" . }}-secret
-                  key: worker-auth-token
+                  key: auth-token
+          {{- if .Values.n8nSuper.enabled }}
+            - name: N8N_SUPER_CONFIG_FILE
+              value: {{ .Values.n8nSuper.configFilePath | quote }}
+          {{- range $key, $value := .Values.n8nSuper.env }}
+            - name: {{ upper $key }}
+              value: {{ $value | quote }}
+          {{- end }}
+          {{- end }}
           {{- if .Values.nodes.builtin.enabled }}
             - name: NODE_FUNCTION_ALLOW_BUILTIN
               value: {{ if .Values.nodes.builtin.modules }}{{ join "," .Values.nodes.builtin.modules }}{{ else }}"*"{{ end }}
@@ -334,10 +341,10 @@ spec:
             - configMapRef:
                 name: {{ template "n8n.taskRunners.fullname" . }}-configmap
           volumeMounts:
-            - name: {{ default "node-modules" .Values.worker.persistence.volumeName }}
-              mountPath: {{ .Values.worker.persistence.mountPath }}
-              {{- if .Values.worker.persistence.subPath }}
-              subPath: {{ .Values.worker.persistence.subPath }}
+            - name: {{ default "node-modules" .Values.main.persistence.volumeName }}
+              mountPath: {{ .Values.main.persistence.mountPath }}
+              {{- if .Values.main.persistence.subPath }}
+              subPath: {{ .Values.main.persistence.subPath }}
               {{- end }}
               readOnly: false
           {{- if .Values.nodes.external.packages }}
@@ -346,10 +353,10 @@ spec:
               readOnly: false
           {{- end }}
       {{- end }}
-      {{- with .Values.worker.extraContainers }}
+      {{- with .Values.main.extraContainers }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if eq (include "n8n.worker.hasVolumes" .) "true" }}
+      {{- if eq (include "n8n.main.hasVolumes" .) "true" }}
       volumes:
       {{- end }}
       {{- if .Values.nodes.external.packages }}
@@ -386,14 +393,14 @@ spec:
               - key: {{ default "cert.key" .Values.db.postgresdb.ssl.existingPrivateKeyFileSecret.key }}
                 path: cert.key
       {{- end }}
-      {{- with (default .Values.volumes .Values.worker.volumes) }}
+      {{- with (default .Values.volumes .Values.main.volumes) }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with (default .Values.affinity .Values.worker.affinity) }}
+      {{- with (default .Values.affinity .Values.main.affinity) }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -410,18 +417,18 @@ spec:
       {{- end }}
   volumeClaimTemplates:
     - metadata:
-        name: {{ default "node-modules" .Values.worker.persistence.volumeName }}
+        name: {{ default "node-modules" .Values.main.persistence.volumeName }}
       spec:
         accessModes:
-          - {{ .Values.worker.persistence.accessMode }}
+          - {{ .Values.main.persistence.accessMode }}
         resources:
           requests:
-            storage: {{ .Values.worker.persistence.size }}
-        {{- if .Values.worker.persistence.storageClass }}
-          {{- if (eq "-" .Values.worker.persistence.storageClass) }}
+            storage: {{ .Values.main.persistence.size }}
+        {{- if .Values.main.persistence.storageClass }}
+          {{- if (eq "-" .Values.main.persistence.storageClass) }}
         storageClassName: ""
           {{- else }}
-        storageClassName: {{ .Values.worker.persistence.storageClass | quote }}
+        storageClassName: {{ .Values.main.persistence.storageClass | quote }}
           {{- end }}
         {{- end }}
 {{- end }}

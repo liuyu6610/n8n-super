@@ -174,6 +174,25 @@ binaryData:
     # -- This is for setting up the s3 file storage existing secret. Must contain access-key-id and secret-access-key keys.
     existingSecret: ""
 
+sharedPersistence:
+  enabled: false
+  existingClaim: ""
+  mountPath: ""
+  subPath: ""
+  volumeName: ""
+  storageClass: ""
+  accessMode: ReadWriteMany
+  size: 8Gi
+
+n8nSuper:
+  enabled: false
+  configFilePath: "/etc/n8n-super.env"
+  sourceConfigFileInTaskRunner: false
+  env: {}
+  files:
+    n8nSuperEnv: ""
+    requirementsTxt: ""
+
 # -- n8n database configurations
 db:
   # -- Prefix to use for table names.
@@ -817,6 +836,11 @@ taskRunners:
 
   # -- The configuration for the external task runner
   external:
+    # -- External task runner image override. By default, it uses the main .Values.image.*.
+    image:
+      repository: "n8nio/runners"
+      tag: ""
+      pullPolicy: ""
     # -- The auth token for the main node
     mainNodeAuthToken: ""
     # -- The auth token for the worker node
@@ -857,6 +881,14 @@ encryptionKey: ""
 
 # -- The name of an existing secret with encryption key. The secret must contain a key with the name N8N_ENCRYPTION_KEY.
 existingEncryptionKeySecret: ""
+
+oneSecret:
+  enabled: false
+  name: "n8n-one-secret"
+  encryptionKey: ""
+  postgresPassword: ""
+  redisUsername: "default"
+  redisPassword: ""
 
 # -- For instance, the Schedule node uses it to know at what time the workflow should start. Find you timezone from here: https://momentjs.com/timezone/
 timezone: "Europe/Berlin"
