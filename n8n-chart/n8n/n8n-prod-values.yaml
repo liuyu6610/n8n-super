@@ -1,6 +1,6 @@
 image:
   repository: crpi-n5rumpjwbqinoz4c.cn-hangzhou.personal.cr.aliyuncs.com/n8nioliuyu/n8n
-  tag: "super-1.78.1"
+  tag: "super-1.78.1-min1"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -250,7 +250,7 @@ taskRunners:
   external:
     image:
       repository: crpi-n5rumpjwbqinoz4c.cn-hangzhou.personal.cr.aliyuncs.com/n8nioliuyu/n8n
-      tag: "super-1.78.1"
+      tag: "super-1.78.1-min1"
       pullPolicy: IfNotPresent
 
 ingress:
