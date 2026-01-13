@@ -245,6 +245,10 @@ spec:
             - name: {{ upper $key }}
               value: {{ $value | quote }}
           {{- end }}
+          {{- if .Values.n8nSuper.enabled }}
+            - name: PATH
+              value: "/opt/n8n-python-venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ template "n8n.fullname" . }}-database-configmap
@@ -365,6 +369,8 @@ spec:
           {{- if .Values.n8nSuper.enabled }}
             - name: N8N_SUPER_CONFIG_FILE
               value: {{ .Values.n8nSuper.configFilePath | quote }}
+            - name: PATH
+              value: "/opt/n8n-python-venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           {{- range $key, $value := .Values.n8nSuper.env }}
             - name: {{ upper $key }}
               value: {{ $value | quote }}

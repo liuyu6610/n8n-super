@@ -1,12 +1,12 @@
----
+﻿---
 # Source: n8n/charts/postgresql/templates/primary/networkpolicy.yaml
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
-  name: n8n-it-postgresql
-  namespace: "it"
+  name: n8n-prod-postgresql
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: postgresql
     app.kubernetes.io/version: 18.1.0
@@ -15,7 +15,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
       app.kubernetes.io/name: postgresql
       app.kubernetes.io/component: primary
   policyTypes:
@@ -31,10 +31,10 @@ spec:
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
-  name: n8n-it-redis
-  namespace: "it"
+  name: n8n-prod-redis
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: redis
     app.kubernetes.io/version: 8.4.0
@@ -42,7 +42,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
       app.kubernetes.io/name: redis
   policyTypes:
     - Ingress
@@ -58,10 +58,10 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: n8n-it-postgresql
-  namespace: "it"
+  name: n8n-prod-postgresql
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: postgresql
     app.kubernetes.io/version: 18.1.0
@@ -71,7 +71,7 @@ spec:
   maxUnavailable: 1
   selector:
     matchLabels:
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
       app.kubernetes.io/name: postgresql
       app.kubernetes.io/component: primary
 ---
@@ -79,10 +79,10 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: n8n-it-redis-master
-  namespace: "it"
+  name: n8n-prod-redis-master
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: redis
     app.kubernetes.io/version: 8.4.0
@@ -92,7 +92,7 @@ spec:
   maxUnavailable: 1
   selector:
     matchLabels:
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
       app.kubernetes.io/name: redis
       app.kubernetes.io/component: master
 ---
@@ -100,11 +100,11 @@ spec:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: n8n-it
+  name: n8n-prod
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: main
@@ -114,17 +114,17 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: n8n
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
 ---
 # Source: n8n/templates/pdb.yaml
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: n8n-it-worker
+  name: n8n-prod-worker
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n-worker
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/component: worker
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
@@ -134,17 +134,17 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: n8n-worker
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
       app.kubernetes.io/component: worker
 ---
 # Source: n8n/charts/postgresql/templates/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: n8n-it-postgresql
-  namespace: "it"
+  name: n8n-prod-postgresql
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: postgresql
     app.kubernetes.io/version: 18.1.0
@@ -156,10 +156,10 @@ apiVersion: v1
 kind: ServiceAccount
 automountServiceAccountToken: false
 metadata:
-  name: n8n-it-redis-master
-  namespace: "it"
+  name: n8n-prod-redis-master
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: redis
     app.kubernetes.io/version: 8.4.0
@@ -169,11 +169,11 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: n8n-it
+  name: n8n-prod
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: main
@@ -184,33 +184,33 @@ automountServiceAccountToken: true
 apiVersion: v1
 kind: Secret
 metadata:
-  name: n8n-one-secret
-  namespace: it
+  name: n8n-secret
+  namespace: default
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
     app.kubernetes.io/managed-by: Helm
   annotations:
     helm.sh/resource-policy: keep
-    meta.helm.sh/release-name: n8n-it
-    meta.helm.sh/release-namespace: it
+    meta.helm.sh/release-name: n8n-prod
+    meta.helm.sh/release-namespace: default
 type: Opaque
 data:
-  N8N_ENCRYPTION_KEY: "MDZiNTJlYjA2OTg4ZDFkODFjNGFjNWJmNDhmNjFjOWI="
-  postgres-password: "N2VjZGEwYWJkYjMyNTEyNjdiMDY0ZjYyZDcxYTNjNzI="
+  N8N_ENCRYPTION_KEY: "NDM2YTQ1YjgxZGM3OGI4YjlhZTZlMjQyODkzMmRmZGU="
+  postgres-password: "ZDE5ZjZhMTkzYTYyYzZlYzFjMzJmMWRmNDBmYTE0YmM="
   redis-username: "ZGVmYXVsdA=="
-  redis-password: "ZDZmOGU2N2I3MzgyZjIxODMwNjlmMzBhMjhmNDgyM2I="
+  redis-password: "MGNjMmZjNDVmODM1Y2JkMjJlYzg2NGNlNzFhNmNkYzQ="
 ---
 # Source: n8n/charts/redis/templates/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-redis-configuration
-  namespace: "it"
+  name: n8n-prod-redis-configuration
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: redis
     app.kubernetes.io/version: 8.4.0
@@ -244,10 +244,10 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-redis-health
-  namespace: "it"
+  name: n8n-prod-redis-health
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: redis
     app.kubernetes.io/version: 8.4.0
@@ -352,10 +352,10 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-redis-scripts
-  namespace: "it"
+  name: n8n-prod-redis-scripts
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: redis
     app.kubernetes.io/version: 8.4.0
@@ -385,15 +385,15 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-database-configmap
+  name: n8n-prod-database-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   DB_TYPE: "postgresdb"
-  DB_POSTGRESDB_HOST: n8n-it-postgresql
+  DB_POSTGRESDB_HOST: n8n-prod-postgresql
   DB_POSTGRESDB_PORT: "5432"
   DB_POSTGRESDB_DATABASE: "n8n"
   DB_POSTGRESDB_POOL_SIZE: "10"
@@ -405,11 +405,11 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-logging-configmap
+  name: n8n-prod-logging-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   N8N_LOG_LEVEL: "info"
@@ -419,11 +419,11 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-diagnostics-configmap
+  name: n8n-prod-diagnostics-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   N8N_DIAGNOSTICS_ENABLED: "false"
@@ -438,11 +438,11 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-version-notifications-configmap
+  name: n8n-prod-version-notifications-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
@@ -451,11 +451,11 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-public-api-configmap
+  name: n8n-prod-public-api-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   N8N_PUBLIC_API_DISABLED: "true"
@@ -466,17 +466,17 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-queue-configmap
+  name: n8n-prod-queue-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   EXECUTIONS_MODE: "queue"
   QUEUE_BULL_REDIS_DB: "0"
   OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true"
-  QUEUE_BULL_REDIS_HOST: n8n-it-redis-master
+  QUEUE_BULL_REDIS_HOST: n8n-prod-redis-master
   QUEUE_BULL_REDIS_PORT: "6379"
   N8N_DISABLE_PRODUCTION_MAIN_PROCESS: "true"
   QUEUE_BULL_REDIS_DUALSTACK: "false"
@@ -485,11 +485,11 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-workflow-history-configmap
+  name: n8n-prod-workflow-history-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   N8N_WORKFLOW_HISTORY_ENABLED: "true"
@@ -499,28 +499,24 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-task-broker-configmap
+  name: n8n-prod-task-broker-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
-  N8N_RUNNERS_ENABLED: "true"
-  N8N_RUNNERS_MODE: "internal"
-  N8N_RUNNERS_TASK_TIMEOUT: "60"
-  N8N_RUNNERS_HEARTBEAT_INTERVAL: "30"
-  N8N_RUNNERS_MAX_CONCURRENCY: "5"
+  N8N_RUNNERS_ENABLED: "false"
 ---
 # Source: n8n/templates/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-metrics-configmap
+  name: n8n-prod-metrics-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   N8N_METRICS: "false"
@@ -541,11 +537,11 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-binary-data-configmap
+  name: n8n-prod-binary-data-configmap
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   N8N_DEFAULT_BINARY_DATA_MODE: "default"
@@ -554,36 +550,31 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: n8n-it-n8n-super-files
+  name: n8n-prod-n8n-super-files
   labels:
     app: n8n
     chart: n8n-1.16.14
-    release: n8n-it
+    release: n8n-prod
     heritage: Helm
 data:
   n8n-super.env: |-
-    # n8n-super 启动自定义配置（会被 /docker-entrypoint-extra.sh 在启动时加载）
-    
-    # pip 镜像源（按需填充；也可直接写死内网源）
-    N8N_PIP_INDEX_URL="${N8N_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+    # n8n-super 鍚姩鑷畾涔夐厤缃紙浼氳 /docker-entrypoint-extra.sh 鍦ㄥ惎鍔ㄦ椂鍔犺浇锛?    
+    # pip 闀滃儚婧愶紙鎸夐渶濉厖锛涗篃鍙洿鎺ュ啓姝诲唴缃戞簮锛?    N8N_PIP_INDEX_URL="${N8N_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
     N8N_PIP_TRUSTED_HOST="${N8N_PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
     N8N_PIP_EXTRA_INDEX_URL="${N8N_PIP_EXTRA_INDEX_URL:-}"
     N8N_PIP_DEFAULT_TIMEOUT="${N8N_PIP_DEFAULT_TIMEOUT:-60}"
     
-    # Python 运行时自动安装依赖
-    N8N_PYTHON_AUTO_INSTALL="${N8N_PYTHON_AUTO_INSTALL:-true}"
+    # Python 杩愯鏃惰嚜鍔ㄥ畨瑁呬緷璧?    N8N_PYTHON_AUTO_INSTALL="${N8N_PYTHON_AUTO_INSTALL:-true}"
     
-    # requirements 挂载路径（与 sharedPersistence.mountPath 对齐）
-    N8N_PYTHON_REQUIREMENTS_FILE="${N8N_PYTHON_REQUIREMENTS_FILE:-/home/node/.n8n/requirements.txt}"
+    # requirements 鎸傝浇璺緞锛堜笌 sharedPersistence.mountPath 瀵归綈锛?    N8N_PYTHON_REQUIREMENTS_FILE="${N8N_PYTHON_REQUIREMENTS_FILE:-/home/node/.n8n/requirements.txt}"
     
-    # venv 缓存目录（共享 PVC 下，便于多副本复用）
+    # venv 缂撳瓨鐩綍锛堝叡浜?PVC 涓嬶紝渚夸簬澶氬壇鏈鐢級
     N8N_PYTHON_VENV_CACHE_DIR="${N8N_PYTHON_VENV_CACHE_DIR:-/home/node/.n8n/pyenvs}"
     
-    # 可选：启动时清理旧 venv 缓存（默认不清理）
-    # N8N_PYTHON_VENV_CACHE_CLEANUP="true"
+    # 鍙€夛細鍚姩鏃舵竻鐞嗘棫 venv 缂撳瓨锛堥粯璁や笉娓呯悊锛?    # N8N_PYTHON_VENV_CACHE_CLEANUP="true"
     # N8N_PYTHON_VENV_CACHE_TTL_DAYS="30"
     
-    # 如镜像内安装了 chromium，则可显式指定 puppeteer 路径
+    # 濡傞暅鍍忓唴瀹夎浜?chromium锛屽垯鍙樉寮忔寚瀹?puppeteer 璺緞
     PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-/usr/bin/chromium}"
   requirements.txt: |-
     requests==2.32.3
@@ -599,11 +590,11 @@ data:
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: n8n-it-main-persistence
+  name: n8n-prod-main-persistence
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n-main-persistence
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/component: persistence
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
@@ -620,10 +611,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: n8n-it-postgresql-hl
-  namespace: "it"
+  name: n8n-prod-postgresql-hl
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: postgresql
     app.kubernetes.io/version: 18.1.0
@@ -642,7 +633,7 @@ spec:
       port: 5432
       targetPort: tcp-postgresql
   selector:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/name: postgresql
     app.kubernetes.io/component: primary
 ---
@@ -650,10 +641,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: n8n-it-postgresql
-  namespace: "it"
+  name: n8n-prod-postgresql
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: postgresql
     app.kubernetes.io/version: 18.1.0
@@ -667,7 +658,7 @@ spec:
       targetPort: tcp-postgresql
       nodePort: null
   selector:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/name: postgresql
     app.kubernetes.io/component: primary
 ---
@@ -675,10 +666,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: n8n-it-redis-headless
-  namespace: "it"
+  name: n8n-prod-redis-headless
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: redis
     app.kubernetes.io/version: 8.4.0
@@ -691,17 +682,17 @@ spec:
       port: 6379
       targetPort: redis
   selector:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/name: redis
 ---
 # Source: n8n/charts/redis/templates/master/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: n8n-it-redis-master
-  namespace: "it"
+  name: n8n-prod-redis-master
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: redis
     app.kubernetes.io/version: 8.4.0
@@ -715,7 +706,7 @@ spec:
       port: 6379
       targetPort: redis
   selector:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/name: redis
     app.kubernetes.io/component: master
 ---
@@ -723,11 +714,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: n8n-it
+  name: n8n-prod
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: main
@@ -741,17 +732,17 @@ spec:
       name: http
   selector:
     app.kubernetes.io/name: n8n
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
 ---
 # Source: n8n/templates/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: n8n-it-webhook
+  name: n8n-prod-webhook
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n-webhook
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/component: webhook
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
@@ -765,18 +756,18 @@ spec:
       name: http
   selector:
     app.kubernetes.io/name: n8n-webhook
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/component: webhook
 ---
 # Source: n8n/templates/deployment-webhook.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: n8n-it-webhook
+  name: n8n-prod-webhook
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n-webhook
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/component: webhook
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
@@ -791,22 +782,22 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: n8n-webhook
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
       app.kubernetes.io/component: webhook
   template:
     metadata:
       annotations:
-        checksum/config: f27dd9e23c8b6f4927591d4ddf884afa6fc6f23d2a470c8efb657dc2fecd6fd8
+        checksum/config: fd1deb6a7182c952fab90ee1a7cfa78c10035c5e71c5eb519095a9010d896cec
       labels:
         helm.sh/chart: n8n-1.16.14
         app.kubernetes.io/name: n8n-webhook
-        app.kubernetes.io/instance: n8n-it
+        app.kubernetes.io/instance: n8n-prod
         app.kubernetes.io/component: webhook
         app.kubernetes.io/version: "2.1.4"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/part-of: n8n
     spec:
-      serviceAccountName: n8n-it
+      serviceAccountName: n8n-prod
       securityContext:
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch
@@ -848,7 +839,12 @@ spec:
               path: /healthz/readiness
               port: http
           resources:
-            {}
+            limits:
+              cpu: 2000m
+              memory: 4096Mi
+            requests:
+              cpu: 1000m
+              memory: 2048Mi
           env:
             - name: N8N_HIRING_BANNER_ENABLED
               value: "false"
@@ -877,7 +873,7 @@ spec:
             - name: N8N_PYTHON_AUTO_INSTALL
               value: "true"
             - name: N8N_PYTHON_REQUIREMENTS_FILE
-              value: "/home/node/.n8n/requirements.txt"
+              value: "/home/node/.n8n/pyenvs/requirements.txt"
             - name: N8N_PYTHON_VENV_CACHE_DIR
               value: "/home/node/.n8n/pyenvs"
             - name: N8N_DISABLE_UI
@@ -889,7 +885,7 @@ spec:
             - name: DB_POSTGRESDB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: n8n-one-secret
+                  name: n8n-secret
                   key: postgres-password
                   optional: true
             - name: QUEUE_HEALTH_CHECK_ACTIVE
@@ -897,73 +893,65 @@ spec:
             - name: QUEUE_BULL_REDIS_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: n8n-one-secret
+                  name: n8n-secret
                   key: redis-username
                   optional: true
             - name: QUEUE_BULL_REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: n8n-one-secret
+                  name: n8n-secret
                   key: redis-password
                   optional: true
-            - name: N8N_RUNNERS_ENABLED
-              value: "true"
-            - name: N8N_RUNNERS_MODE
-              value: internal
-            - name: N8N_RUNNERS_TASK_TIMEOUT
-              value: "60"
-            - name: N8N_RUNNERS_HEARTBEAT_INTERVAL
-              value: "30"
-            - name: N8N_RUNNERS_MAX_CONCURRENCY
-              value: "5"
             - name: GENERIC_TIMEZONE
               value: "Asia/Shanghai"
+            - name: N8N_RUNNERS_ENABLED
+              value: "false"
             - name: TZ
               value: "Asia/Shanghai"
           envFrom:
             - configMapRef:
-                name: n8n-it-database-configmap
+                name: n8n-prod-database-configmap
             - configMapRef:
-                name: n8n-it-logging-configmap
+                name: n8n-prod-logging-configmap
             - configMapRef:
-                name: n8n-it-diagnostics-configmap
+                name: n8n-prod-diagnostics-configmap
             - configMapRef:
-                name: n8n-it-version-notifications-configmap
+                name: n8n-prod-version-notifications-configmap
             - configMapRef:
-                name: n8n-it-public-api-configmap
+                name: n8n-prod-public-api-configmap
             - configMapRef:
-                name: n8n-it-queue-configmap
+                name: n8n-prod-queue-configmap
             - secretRef:
-                name: n8n-one-secret
+                name: n8n-secret
           volumeMounts:
-            - name: node-modules
-              mountPath: /home/node/.n8n
+            - name: pyenvs-cache
+              mountPath: /home/node/.n8n/pyenvs
               readOnly: false
             - name: n8n-super-files
               mountPath: "/etc/n8n-super.env"
               subPath: n8n-super.env
               readOnly: true
             - name: n8n-super-files
-              mountPath: "/home/node/.n8n/requirements.txt"
+              mountPath: "/home/node/.n8n/pyenvs/requirements.txt"
               subPath: requirements.txt
               readOnly: true
       volumes:
-        - name: node-modules
+        - name: pyenvs-cache
           persistentVolumeClaim:
-            claimName: n8n-it-main-persistence
+            claimName: n8n-prod-main-persistence
         - name: n8n-super-files
           configMap:
-            name: n8n-it-n8n-super-files
+            name: n8n-prod-n8n-super-files
 ---
 # Source: n8n/templates/deployment-worker.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: n8n-it-worker
+  name: n8n-prod-worker
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n-worker
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/component: worker
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
@@ -978,22 +966,22 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: n8n-worker
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
       app.kubernetes.io/component: worker
   template:
     metadata:
       annotations:
-        checksum/config: f27dd9e23c8b6f4927591d4ddf884afa6fc6f23d2a470c8efb657dc2fecd6fd8
+        checksum/config: fd1deb6a7182c952fab90ee1a7cfa78c10035c5e71c5eb519095a9010d896cec
       labels:
         helm.sh/chart: n8n-1.16.14
         app.kubernetes.io/name: n8n-worker
-        app.kubernetes.io/instance: n8n-it
+        app.kubernetes.io/instance: n8n-prod
         app.kubernetes.io/component: worker
         app.kubernetes.io/version: "2.1.4"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/part-of: n8n
     spec:
-      serviceAccountName: n8n-it
+      serviceAccountName: n8n-prod
       securityContext:
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch
@@ -1027,15 +1015,26 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 5
           livenessProbe:
+            failureThreshold: 3
             httpGet:
               path: /healthz
               port: http
+            initialDelaySeconds: 300
+            periodSeconds: 10
           readinessProbe:
+            failureThreshold: 3
             httpGet:
               path: /healthz/readiness
               port: http
+            initialDelaySeconds: 300
+            periodSeconds: 10
           resources:
-            {}
+            limits:
+              cpu: 4000m
+              memory: 8192Mi
+            requests:
+              cpu: 2000m
+              memory: 4096Mi
           env:
             - name: N8N_HIRING_BANNER_ENABLED
               value: "false"
@@ -1071,7 +1070,7 @@ spec:
               value: "true"
             
             - name: N8N_PYTHON_REQUIREMENTS_FILE
-              value: "/home/node/.n8n/requirements.txt"
+              value: "/home/node/.n8n/pyenvs/requirements.txt"
             
             - name: N8N_PYTHON_VENV_CACHE_DIR
               value: "/home/node/.n8n/pyenvs"
@@ -1088,75 +1087,77 @@ spec:
             - name: DB_POSTGRESDB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: n8n-one-secret
+                  name: n8n-secret
                   key: postgres-password
                   optional: true
             - name: QUEUE_BULL_REDIS_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: n8n-one-secret
+                  name: n8n-secret
                   key: redis-username
                   optional: true
             - name: QUEUE_BULL_REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: n8n-one-secret
+                  name: n8n-secret
                   key: redis-password
                   optional: true
             - name: GENERIC_TIMEZONE
               value: "Asia/Shanghai"
+            - name: N8N_RUNNERS_ENABLED
+              value: "false"
             - name: TZ
               value: "Asia/Shanghai"
           envFrom:
             - configMapRef:
-                name: n8n-it-database-configmap
+                name: n8n-prod-database-configmap
             - configMapRef:
-                name: n8n-it-logging-configmap
+                name: n8n-prod-logging-configmap
             - configMapRef:
-                name: n8n-it-diagnostics-configmap
+                name: n8n-prod-diagnostics-configmap
             - configMapRef:
-                name: n8n-it-version-notifications-configmap
+                name: n8n-prod-version-notifications-configmap
             - configMapRef:
-                name: n8n-it-public-api-configmap
+                name: n8n-prod-public-api-configmap
             - configMapRef:
-                name: n8n-it-queue-configmap
+                name: n8n-prod-queue-configmap
             - configMapRef:
-                name: n8n-it-task-broker-configmap
+                name: n8n-prod-task-broker-configmap
             - configMapRef:
-                name: n8n-it-metrics-configmap
+                name: n8n-prod-metrics-configmap
             - configMapRef:
-                name: n8n-it-binary-data-configmap
+                name: n8n-prod-binary-data-configmap
             - secretRef:
-                name: n8n-one-secret
+                name: n8n-secret
           volumeMounts:
-            - name: node-modules
-              mountPath: /home/node/.n8n
+            - name: pyenvs-cache
+              mountPath: /home/node/.n8n/pyenvs
               readOnly: false
             - name: n8n-super-files
               mountPath: "/etc/n8n-super.env"
               subPath: n8n-super.env
               readOnly: true
             - name: n8n-super-files
-              mountPath: "/home/node/.n8n/requirements.txt"
+              mountPath: "/home/node/.n8n/pyenvs/requirements.txt"
               subPath: requirements.txt
               readOnly: true
       volumes:
-        - name: node-modules
+        - name: pyenvs-cache
           persistentVolumeClaim:
-            claimName: n8n-it-main-persistence
+            claimName: n8n-prod-main-persistence
         - name: n8n-super-files
           configMap:
-            name: n8n-it-n8n-super-files
+            name: n8n-prod-n8n-super-files
 ---
 # Source: n8n/templates/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: n8n-it
+  name: n8n-prod
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: main
@@ -1171,21 +1172,21 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: n8n
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
   template:
     metadata:
       annotations:
-        checksum/config: f27dd9e23c8b6f4927591d4ddf884afa6fc6f23d2a470c8efb657dc2fecd6fd8
+        checksum/config: fd1deb6a7182c952fab90ee1a7cfa78c10035c5e71c5eb519095a9010d896cec
       labels:
         helm.sh/chart: n8n-1.16.14
         app.kubernetes.io/name: n8n
-        app.kubernetes.io/instance: n8n-it
+        app.kubernetes.io/instance: n8n-prod
         app.kubernetes.io/version: "2.1.4"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/component: main
         app.kubernetes.io/part-of: n8n
     spec:
-      serviceAccountName: n8n-it
+      serviceAccountName: n8n-prod
       securityContext:
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch
@@ -1222,7 +1223,12 @@ spec:
             initialDelaySeconds: 300
             periodSeconds: 10
           resources:
-            {}
+            limits:
+              cpu: 4000m
+              memory: 8192Mi
+            requests:
+              cpu: 2000m
+              memory: 4096Mi
           env:
             - name: N8N_HIRING_BANNER_ENABLED
               value: "false"
@@ -1258,7 +1264,7 @@ spec:
               value: "true"
             
             - name: N8N_PYTHON_REQUIREMENTS_FILE
-              value: "/home/node/.n8n/requirements.txt"
+              value: "/home/node/.n8n/pyenvs/requirements.txt"
             
             - name: N8N_PYTHON_VENV_CACHE_DIR
               value: "/home/node/.n8n/pyenvs"
@@ -1271,19 +1277,19 @@ spec:
             - name: DB_POSTGRESDB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: n8n-one-secret
+                  name: n8n-secret
                   key: postgres-password
                   optional: true
             - name: QUEUE_BULL_REDIS_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: n8n-one-secret
+                  name: n8n-secret
                   key: redis-username
                   optional: true
             - name: QUEUE_BULL_REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: n8n-one-secret
+                  name: n8n-secret
                   key: redis-password
                   optional: true
             - name: WEBHOOK_URL
@@ -1298,61 +1304,63 @@ spec:
               value: "http"
             - name: N8N_PUSH_BACKEND
               value: "websocket"
+            - name: N8N_RUNNERS_ENABLED
+              value: "false"
             - name: N8N_TRUST_PROXY
               value: "true"
             - name: TZ
               value: "Asia/Shanghai"
           envFrom:
             - configMapRef:
-                name: n8n-it-database-configmap
+                name: n8n-prod-database-configmap
             - configMapRef:
-                name: n8n-it-logging-configmap
+                name: n8n-prod-logging-configmap
             - configMapRef:
-                name: n8n-it-diagnostics-configmap
+                name: n8n-prod-diagnostics-configmap
             - configMapRef:
-                name: n8n-it-version-notifications-configmap
+                name: n8n-prod-version-notifications-configmap
             - configMapRef:
-                name: n8n-it-public-api-configmap
+                name: n8n-prod-public-api-configmap
             - configMapRef:
-                name: n8n-it-queue-configmap
+                name: n8n-prod-queue-configmap
             - configMapRef:
-                name: n8n-it-workflow-history-configmap
+                name: n8n-prod-workflow-history-configmap
             - configMapRef:
-                name: n8n-it-task-broker-configmap
+                name: n8n-prod-task-broker-configmap
             - configMapRef:
-                name: n8n-it-metrics-configmap
+                name: n8n-prod-metrics-configmap
             - configMapRef:
-                name: n8n-it-binary-data-configmap
+                name: n8n-prod-binary-data-configmap
             - secretRef:
-                name: n8n-one-secret
+                name: n8n-secret
           volumeMounts:
-            - name: node-modules
-              mountPath: /home/node/.n8n
+            - name: pyenvs-cache
+              mountPath: /home/node/.n8n/pyenvs
               readOnly: false
             - name: n8n-super-files
               mountPath: "/etc/n8n-super.env"
               subPath: n8n-super.env
               readOnly: true
             - name: n8n-super-files
-              mountPath: "/home/node/.n8n/requirements.txt"
+              mountPath: "/home/node/.n8n/pyenvs/requirements.txt"
               subPath: requirements.txt
               readOnly: true
       volumes:
-        - name: node-modules
+        - name: pyenvs-cache
           persistentVolumeClaim:
-            claimName: n8n-it-main-persistence
+            claimName: n8n-prod-main-persistence
         - name: n8n-super-files
           configMap:
-            name: n8n-it-n8n-super-files
+            name: n8n-prod-n8n-super-files
 ---
 # Source: n8n/charts/postgresql/templates/primary/statefulset.yaml
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: n8n-it-postgresql
-  namespace: "it"
+  name: n8n-prod-postgresql
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: postgresql
     app.kubernetes.io/version: 18.1.0
@@ -1360,27 +1368,27 @@ metadata:
     app.kubernetes.io/component: primary
 spec:
   replicas: 1
-  serviceName: n8n-it-postgresql-hl
+  serviceName: n8n-prod-postgresql-hl
   updateStrategy:
     rollingUpdate: {}
     type: RollingUpdate
   selector:
     matchLabels:
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
       app.kubernetes.io/name: postgresql
       app.kubernetes.io/component: primary
   template:
     metadata:
-      name: n8n-it-postgresql
+      name: n8n-prod-postgresql
       labels:
-        app.kubernetes.io/instance: n8n-it
+        app.kubernetes.io/instance: n8n-prod
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: postgresql
         app.kubernetes.io/version: 18.1.0
         helm.sh/chart: postgresql-18.2.0
         app.kubernetes.io/component: primary
     spec:
-      serviceAccountName: n8n-it-postgresql
+      serviceAccountName: n8n-prod-postgresql
       
       automountServiceAccountToken: false
       affinity:
@@ -1391,7 +1399,7 @@ spec:
             - podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    app.kubernetes.io/instance: n8n-it
+                    app.kubernetes.io/instance: n8n-prod
                     app.kubernetes.io/name: postgresql
                     app.kubernetes.io/component: primary
                 topologyKey: kubernetes.io/hostname
@@ -1488,13 +1496,11 @@ spec:
                   [ -f /opt/bitnami/postgresql/tmp/.initialized ] || [ -f /bitnami/postgresql/.initialized ]
           resources:
             limits:
-              cpu: 150m
-              ephemeral-storage: 2Gi
-              memory: 192Mi
+              cpu: 2000m
+              memory: 4096Mi
             requests:
-              cpu: 100m
-              ephemeral-storage: 50Mi
-              memory: 128Mi
+              cpu: 1000m
+              memory: 2048Mi
           volumeMounts:
             - name: empty-dir
               mountPath: /tmp
@@ -1516,7 +1522,7 @@ spec:
           emptyDir: {}
         - name: postgresql-password
           secret:
-            secretName: n8n-one-secret
+            secretName: n8n-secret
         - name: dshm
           emptyDir:
             medium: Memory
@@ -1537,10 +1543,10 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: n8n-it-redis-master
-  namespace: "it"
+  name: n8n-prod-redis-master
+  namespace: "default"
   labels:
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: redis
     app.kubernetes.io/version: 8.4.0
@@ -1551,16 +1557,16 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      app.kubernetes.io/instance: n8n-it
+      app.kubernetes.io/instance: n8n-prod
       app.kubernetes.io/name: redis
       app.kubernetes.io/component: master
-  serviceName: n8n-it-redis-headless
+  serviceName: n8n-prod-redis-headless
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app.kubernetes.io/instance: n8n-it
+        app.kubernetes.io/instance: n8n-prod
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: redis
         app.kubernetes.io/version: 8.4.0
@@ -1578,7 +1584,7 @@ spec:
         fsGroupChangePolicy: Always
         supplementalGroups: []
         sysctls: []
-      serviceAccountName: n8n-it-redis-master
+      serviceAccountName: n8n-prod-redis-master
       automountServiceAccountToken: false
       affinity:
         podAffinity:
@@ -1588,7 +1594,7 @@ spec:
             - podAffinityTerm:
                 labelSelector:
                   matchLabels:
-                    app.kubernetes.io/instance: n8n-it
+                    app.kubernetes.io/instance: n8n-prod
                     app.kubernetes.io/name: redis
                     app.kubernetes.io/component: master
                 topologyKey: kubernetes.io/hostname
@@ -1661,13 +1667,11 @@ spec:
                 - "/health/ping_readiness_local.sh 1"
           resources:
             limits:
-              cpu: 150m
-              ephemeral-storage: 2Gi
-              memory: 192Mi
+              cpu: 1000m
+              memory: 2048Mi
             requests:
-              cpu: 100m
-              ephemeral-storage: 50Mi
-              memory: 128Mi
+              cpu: 500m
+              memory: 1024Mi
           volumeMounts:
             - name: start-scripts
               mountPath: /opt/bitnami/scripts/start-scripts
@@ -1688,22 +1692,22 @@ spec:
       volumes:
         - name: start-scripts
           configMap:
-            name: n8n-it-redis-scripts
+            name: n8n-prod-redis-scripts
             defaultMode: 0755
         - name: health
           configMap:
-            name: n8n-it-redis-health
+            name: n8n-prod-redis-health
             defaultMode: 0755
         - name: redis-password
           
           secret:
-            secretName: n8n-one-secret
+            secretName: n8n-secret
             items:
             - key: redis-password
               path: redis-password
         - name: config
           configMap:
-            name: n8n-it-redis-configuration
+            name: n8n-prod-redis-configuration
         - name: empty-dir
           emptyDir: {}
   volumeClaimTemplates:
@@ -1712,7 +1716,7 @@ spec:
       metadata:
         name: redis-data
         labels:
-          app.kubernetes.io/instance: n8n-it
+          app.kubernetes.io/instance: n8n-prod
           app.kubernetes.io/name: redis
           app.kubernetes.io/component: master
       spec:
@@ -1727,11 +1731,11 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: n8n-it
+  name: n8n-prod
   labels:
     helm.sh/chart: n8n-1.16.14
     app.kubernetes.io/name: n8n
-    app.kubernetes.io/instance: n8n-it
+    app.kubernetes.io/instance: n8n-prod
     app.kubernetes.io/version: "2.1.4"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: main
@@ -1756,76 +1760,76 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: n8n-it
+                name: n8n-prod
                 port:
                   number: 5678
           - path: /webhook/
             pathType: Prefix
             backend:
               service:
-                name: n8n-it-webhook
+                name: n8n-prod-webhook
                 port:
                   number: 5678
           - path: /webhook-test/
             pathType: Prefix
             backend:
               service:
-                name: n8n-it
+                name: n8n-prod
                 port:
                   number: 5678
           - path: /form/
             pathType: Prefix
             backend:
               service:
-                name: n8n-it-webhook
+                name: n8n-prod-webhook
                 port:
                   number: 5678
           - path: /form-test/
             pathType: Prefix
             backend:
               service:
-                name: n8n-it
+                name: n8n-prod
                 port:
                   number: 5678
           - path: /mcp/
             pathType: Prefix
             backend:
               service:
-                name: n8n-it-webhook
+                name: n8n-prod-webhook
                 port:
                   number: 5678
           - path: /mcp-test/
             pathType: Prefix
             backend:
               service:
-                name: n8n-it
+                name: n8n-prod
                 port:
                   number: 5678
           - path: /rest/oauth2-credential/callback
             pathType: Prefix
             backend:
               service:
-                name: n8n-it
+                name: n8n-prod
                 port:
                   number: 5678
           - path: /static/
             pathType: Prefix
             backend:
               service:
-                name: n8n-it
+                name: n8n-prod
                 port:
                   number: 5678
           - path: /webhook-waiting/
             pathType: Prefix
             backend:
               service:
-                name: n8n-it-webhook
+                name: n8n-prod-webhook
                 port:
                   number: 5678
           - path: /form-waiting/
             pathType: Prefix
             backend:
               service:
-                name: n8n-it-webhook
+                name: n8n-prod-webhook
                 port:
                   number: 5678

@@ -145,14 +145,16 @@ n8nSuper:
     N8N_PIP_TRUSTED_HOST: "pypi.tuna.tsinghua.edu.cn"
     N8N_PIP_EXTRA_INDEX_URL: ""
     N8N_PIP_DEFAULT_TIMEOUT: "60"
-    N8N_PYTHON_AUTO_INSTALL: "true"
-    N8N_PYTHON_REQUIREMENTS_FILE: "/home/node/.n8n/pyenvs/requirements.txt"
-    N8N_PYTHON_VENV_CACHE_DIR: "/home/node/.n8n/pyenvs"
+    N8N_PYTHON_AUTO_INSTALL: "false"
+    N8N_PYTHON_REQUIREMENTS_FILE: ""
+    N8N_PYTHON_PACKAGES: ""
   # 若你启用了 taskRunners.mode=external，且希望 runner sidecar 也 source 同一份配置文件，开启该开关
   sourceConfigFileInTaskRunner: true
   files:
     n8nSuperEnv: |-
       # n8n-super 启动自定义配置（会被 /docker-entrypoint-extra.sh 在启动时加载）
+
+      PATH="/opt/n8n-python-venv/bin:${PATH}"
 
       # pip 镜像源（按需填充；也可直接写死内网源）
       N8N_PIP_INDEX_URL="${N8N_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
@@ -161,13 +163,13 @@ n8nSuper:
       N8N_PIP_DEFAULT_TIMEOUT="${N8N_PIP_DEFAULT_TIMEOUT:-60}"
 
       # Python 运行时自动安装依赖
-      N8N_PYTHON_AUTO_INSTALL="${N8N_PYTHON_AUTO_INSTALL:-true}"
+      N8N_PYTHON_AUTO_INSTALL="false"
 
       # requirements 挂载路径（与 sharedPersistence.mountPath 对齐）
-      N8N_PYTHON_REQUIREMENTS_FILE="${N8N_PYTHON_REQUIREMENTS_FILE:-/home/node/.n8n/requirements.txt}"
+      N8N_PYTHON_REQUIREMENTS_FILE=""
 
       # venv 缓存目录（共享 PVC 下，便于多副本复用）
-      N8N_PYTHON_VENV_CACHE_DIR="${N8N_PYTHON_VENV_CACHE_DIR:-/home/node/.n8n/pyenvs}"
+      N8N_PYTHON_VENV_CACHE_DIR=""
 
       # 可选：启动时清理旧 venv 缓存（默认不清理）
       # N8N_PYTHON_VENV_CACHE_CLEANUP="true"
@@ -181,6 +183,7 @@ n8nSuper:
       PyYAML==6.0.2
       pandas==2.2.3
       numpy==2.2.3
+      fire==0.6.0
       python-gitlab==5.3.0
       openpyxl==3.1.5
       pytz==2025.1
@@ -231,6 +234,7 @@ webhook:
     GENERIC_TIMEZONE: "Asia/Shanghai"
 
 taskRunners:
+  enabled: false
   mode: internal
   external:
     image:

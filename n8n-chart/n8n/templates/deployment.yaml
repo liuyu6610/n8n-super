@@ -125,14 +125,16 @@ spec:
               value: {{ .Values.timezone | quote }}
             - name: N8N_GRACEFUL_SHUTDOWN_TIMEOUT
               value: {{ .Values.gracefulShutdownTimeout | quote }}
-            {{ if .Values.n8nSuper.enabled }}
+            {{- if .Values.n8nSuper.enabled }}
             - name: N8N_SUPER_CONFIG_FILE
               value: {{ .Values.n8nSuper.configFilePath | quote }}
-            {{ range $key, $value := .Values.n8nSuper.env }}
+            - name: PATH
+              value: "/opt/n8n-python-venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            {{- range $key, $value := .Values.n8nSuper.env }}
             - name: {{ upper $key }}
               value: {{ $value | quote }}
-            {{ end }}
-            {{ end }}
+            {{- end }}
+          {{- end }}
           {{- if .Values.main.editorBaseUrl }}
             - name: N8N_EDITOR_BASE_URL
               value: {{ .Values.main.editorBaseUrl | quote }}

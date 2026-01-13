@@ -191,15 +191,16 @@ metadata:
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 data:
-  N8N_RUNNERS_ENABLED: "true"
+  N8N_RUNNERS_ENABLED: {{ .Values.taskRunners.enabled | quote }}
+{{- if .Values.taskRunners.enabled }}
   N8N_RUNNERS_MODE: {{ .Values.taskRunners.mode | quote }}
   N8N_RUNNERS_TASK_TIMEOUT: {{ .Values.taskRunners.taskTimeout | quote }}
   N8N_RUNNERS_HEARTBEAT_INTERVAL: {{ .Values.taskRunners.taskHeartbeatInterval | quote }}
-{{- if eq .Values.taskRunners.mode "external" }}
   N8N_RUNNERS_BROKER_LISTEN_ADDRESS: {{ .Values.taskRunners.broker.address | quote }}
   N8N_RUNNERS_BROKER_PORT: {{ .Values.taskRunners.broker.port | quote }}
-{{- else }}
+{{- if ne .Values.taskRunners.mode "external" }}
   N8N_RUNNERS_MAX_CONCURRENCY: {{ .Values.taskRunners.maxConcurrency | quote }}
+{{- end }}
 {{- end }}
 ---
 apiVersion: v1

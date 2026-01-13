@@ -127,6 +127,8 @@ spec:
           {{- if .Values.n8nSuper.enabled }}
             - name: N8N_SUPER_CONFIG_FILE
               value: {{ .Values.n8nSuper.configFilePath | quote }}
+            - name: PATH
+              value: "/opt/n8n-python-venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
           {{- range $key, $value := .Values.n8nSuper.env }}
             - name: {{ upper $key }}
               value: {{ $value | quote }}
@@ -164,6 +166,7 @@ spec:
                   name: {{ default (include "n8n.redis.fullname" .) .Values.externalRedis.existingSecret }}
                   key: redis-password
                   optional: true
+          {{- if .Values.taskRunners.enabled }}
             - name: N8N_RUNNERS_ENABLED
               value: "true"
             - name: N8N_RUNNERS_MODE
@@ -174,6 +177,7 @@ spec:
               value: {{ .Values.taskRunners.taskHeartbeatInterval | quote }}
             - name: N8N_RUNNERS_MAX_CONCURRENCY
               value: {{ .Values.taskRunners.maxConcurrency | quote }}
+          {{- end }}
           {{- range $key, $value := (default .Values.extraEnvVars .Values.webhook.extraEnvVars) }}
             - name: {{ upper $key }}
               value: {{ $value | quote }}

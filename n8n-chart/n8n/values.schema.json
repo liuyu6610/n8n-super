@@ -4142,6 +4142,13 @@
     "taskRunners": {
       "additionalProperties": false,
       "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Whether to enable task runners (N8N_RUNNERS_* env injection). Set to false to disable runners entirely.",
+          "required": [],
+          "title": "enabled",
+          "type": "boolean"
+        },
         "mode": {
           "default": "internal",
           "description": "Use `internal` to use internal task runner, or use `external` to have external sidecar task runner",

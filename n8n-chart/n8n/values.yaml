@@ -818,6 +818,8 @@ webhook:
 
 # -- Task runners mode. Please follow the documentation for more information: https://docs.n8n.io/hosting/configuration/task-runners/
 taskRunners:
+  # -- Whether to enable task runners (N8N_RUNNERS_* env injection). Set to false to disable runners entirely.
+  enabled: true
   # -- Use `internal` to use internal task runner, or use `external` to have external sidecar task runner. For more information please follow the documentation: https://docs.n8n.io/hosting/configuration/task-runners/#task-runner-modes
   mode: internal
   # -- The timeout for the task in seconds
