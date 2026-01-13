@@ -9,6 +9,43 @@
 
 ---
 
+## 0. 工作流工具选型终极速查卡（1 页）
+
+> 如果不看长篇大论，只看这一节，足够向团队说明 n8n / Airflow 等工具的本质区别和选型逻辑。
+> 更完整的对比见：`docs/workflow-tooling-comparison.md`。
+
+### 0.1 核心定位：一句话讲透
+
+- **n8n：神经系统（Signal / 流程自动化）**  
+  事件驱动（Webhook/告警/表单/IM），处理小 JSON/消息，追求实时响应；更像“交通指挥员”。  
+- **Airflow：循环系统（Data / 批处理编排）**  
+  时间驱动（Schedule），处理数据集/表/文件/计算，追求稳定与吞吐；更像“重型货运火车”。  
+- **Argo Workflows：K8s 容器作业编排引擎**  
+  每一步一个容器/Pod，擅长并行 Job、批处理、K8s 上的 pipeline。  
+- **Temporal：可恢复的长流程引擎（Durable Execution）**  
+  用 SDK 写“业务流程/长事务”，可等待外部事件、故障可恢复，适合复杂可靠编排。  
+- **Prefect / Dagster：Python 数据编排（偏数据工程）**  
+  类 Airflow 的数据/批任务编排，但更偏 Python 开发体验与数据资产/血缘治理。  
+- **Jenkins Pipeline / GitHub Actions：CI/CD 流水线**  
+  构建、测试、发布、部署的“传送带”，不建议当通用运维编排平台。  
+- **Rundeck / StackStorm：Runbook 自助与事件自动化**  
+  把脚本/工具变成可授权的自助操作，或用事件规则做自动修复/ChatOps。
+
+### 0.2 SRE 选型指令（If-Then）
+
+- **如果是“发消息、调接口、搞审批、告警富化、跨系统胶水”**：用 `n8n`
+- **如果是“定时跑批、同步全量数据、清洗计算、报表生成、回填重跑”**：用 `Airflow`（或 Prefect/Dagster）
+- **如果是“K8s 上并行容器 Job/一次性工具/计算密集任务”**：用 `Argo Workflows`
+- **如果是“微服务长流程/需要可靠恢复/可能跑很久并等待外部事件”**：用 `Temporal`
+- **如果是“构建-测试-发布-部署”**：用 `Jenkins Pipeline` / `GitHub Actions`
+- **如果是“运维脚本自助执行 + 权限 + 审计/或事件驱动自动化修复”**：用 `Rundeck` / `StackStorm`
+
+### 0.3 一句话总结（给团队）
+
+> **轻活急活（消息/API/审批/告警）走 n8n；重活慢活（数据/跑批/报表）走 Airflow；容器并行走 Argo；长事务可靠流程走 Temporal；交付流水线走 Jenkins/GitHub Actions；运维自助/自动修复走 Rundeck/StackStorm。**
+
+---
+
 ## 1. 关键机制速览（镜像内置，无需改动）
 
 - **python3 调用路径**：`/opt/n8n-python-venv/bin/python3` 被替换为 `n8n-python3-wrapper.sh`。

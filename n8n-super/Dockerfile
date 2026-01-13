@@ -164,11 +164,29 @@ ARG PIP_DEFAULT_TIMEOUT
 # 扩展示例（只示意）：
 # - 你可以在这里再安装 kubectl/helm/terraform 等，并把版本做成 ARG
 ARG ARGOCD_VERSION=v2.13.3
+ARG KUBECTL_VERSION=v1.30.8
+ARG KUBECTL_SHA256=""
+ARG HELM_VERSION=v3.15.4
+ARG HELM_SHA256=""
 RUN set -eux; \
   arch="amd64"; \
   curl -fsSL -o /usr/local/bin/argocd "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-${arch}"; \
   chmod +x /usr/local/bin/argocd; \
-  /usr/local/bin/argocd version --client || true
+  /usr/local/bin/argocd version --client || true; \
+  os="linux"; \
+  url="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/${os}/${arch}/kubectl"; \
+  curl -fsSL -o /usr/local/bin/kubectl "${url}"; \
+  chmod +x /usr/local/bin/kubectl; \
+  if [ -n "${KUBECTL_SHA256}" ]; then echo "${KUBECTL_SHA256}  /usr/local/bin/kubectl" | sha256sum -c -; fi; \
+  /usr/local/bin/kubectl version --client --output=yaml || true; \
+  helm_tgz="helm-${HELM_VERSION}-${os}-${arch}.tar.gz"; \
+  curl -fsSL -o "/tmp/${helm_tgz}" "https://get.helm.sh/${helm_tgz}"; \
+  if [ -n "${HELM_SHA256}" ]; then echo "${HELM_SHA256}  /tmp/${helm_tgz}" | sha256sum -c -; fi; \
+  tar -C /tmp -zxf "/tmp/${helm_tgz}"; \
+  mv "/tmp/${os}-${arch}/helm" /usr/local/bin/helm; \
+  chmod +x /usr/local/bin/helm; \
+  rm -rf "/tmp/${helm_tgz}" "/tmp/${os}-${arch}"; \
+  /usr/local/bin/helm version || true
 
 # n8n community nodes
 #
