@@ -7,6 +7,7 @@
 #   .\windows\build.ps1 -Tag "n8n-super:1.78.1-r1"
 param(
   [string]$Tag = "n8n-super:1.78.1",
+  [string]$N8nBaseImage = "",
   [string]$CommunityNodes = "",
   [string]$ArgoCdVersion = "",
   [string]$PipIndexUrl = "",
@@ -83,6 +84,17 @@ if ($ArgoCdVersion) {
 } elseif ($BuildEnv.ContainsKey('ARGOCD_VERSION') -and $BuildEnv['ARGOCD_VERSION']) {
   $buildArgs += "--build-arg"
   $buildArgs += "ARGOCD_VERSION=$($BuildEnv['ARGOCD_VERSION'])"
+}
+
+if ($N8nBaseImage) {
+  $buildArgs += "--build-arg"
+  $buildArgs += "N8N_BASE_IMAGE=$N8nBaseImage"
+} elseif ($env:N8N_BASE_IMAGE) {
+  $buildArgs += "--build-arg"
+  $buildArgs += "N8N_BASE_IMAGE=$($env:N8N_BASE_IMAGE)"
+} elseif ($BuildEnv.ContainsKey('N8N_BASE_IMAGE') -and $BuildEnv['N8N_BASE_IMAGE']) {
+  $buildArgs += "--build-arg"
+  $buildArgs += "N8N_BASE_IMAGE=$($BuildEnv['N8N_BASE_IMAGE'])"
 }
 
 Add-BuildArgIfPresent -Name "PIP_INDEX_URL" -Value $PipIndexUrl -EnvName1 "PIP_INDEX_URL" -EnvName2 "N8N_PIP_INDEX_URL"

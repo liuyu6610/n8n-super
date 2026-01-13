@@ -1,0 +1,287 @@
+{
+  "name": "OPS-K8S-15-SERVICES-EXAMPLE",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "owner",
+              "value": "OWNER_TEMPLATE"
+            },
+            {
+              "name": "notifyWebhook",
+              "value": "https://example.com/notify-webhook"
+            },
+            {
+              "name": "executeEndpoint",
+              "value": "https://example.com/k8s-action"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Set Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        480,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const owner = $json.owner;\n\n// 15个服务集合示例：后续你把这里替换成你负责的服务列表即可\n// 每个任务可扩展字段：scheduleKey/calendarKey/retries/timeout/labels等等\nconst tasks = [\n  { name: 'svc-01', action: 'restart', namespace: 'default', target: 'deployment/svc-01' },\n  { name: 'svc-02', action: 'check',   namespace: 'default', target: 'deployment/svc-02' },\n  { name: 'svc-03', action: 'create',  namespace: 'default', target: 'job/svc-03' },\n  { name: 'svc-04', action: 'delete',  namespace: 'default', target: 'job/svc-04' },\n  { name: 'svc-05', action: 'restart', namespace: 'default', target: 'deployment/svc-05' },\n  { name: 'svc-06', action: 'check',   namespace: 'default', target: 'deployment/svc-06' },\n  { name: 'svc-07', action: 'restart', namespace: 'default', target: 'statefulset/svc-07' },\n  { name: 'svc-08', action: 'check',   namespace: 'default', target: 'deployment/svc-08' },\n  { name: 'svc-09', action: 'create',  namespace: 'default', target: 'job/svc-09' },\n  { name: 'svc-10', action: 'delete',  namespace: 'default', target: 'job/svc-10' },\n  { name: 'svc-11', action: 'restart', namespace: 'default', target: 'deployment/svc-11' },\n  { name: 'svc-12', action: 'check',   namespace: 'default', target: 'deployment/svc-12' },\n  { name: 'svc-13', action: 'restart', namespace: 'default', target: 'deployment/svc-13' },\n  { name: 'svc-14', action: 'check',   namespace: 'default', target: 'deployment/svc-14' },\n  { name: 'svc-15', action: 'restart', namespace: 'default', target: 'deployment/svc-15' }\n];\n\nreturn tasks.map(t => ({ json: { owner, ...t } }));\n"
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Build Task List",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        720,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        960,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$node[\"Set Vars\"].json[\"executeEndpoint\"]}}",
+        "method": "POST",
+        "jsonParameters": true,
+        "options": {
+          "timeout": 30000
+        },
+        "bodyParametersJson": "{\n  \"owner\": \"={{$json.owner}}\",\n  \"name\": \"={{$json.name}}\",\n  \"action\": \"={{$json.action}}\",\n  \"namespace\": \"={{$json.namespace}}\",\n  \"target\": \"={{$json.target}}\"\n}\n"
+      },
+      "id": "55555555-5555-5555-5555-555555555555",
+      "name": "Execute Action (HTTP placeholder)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1200,
+        260
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error !== undefined}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "66666666-6666-6666-6666-666666666666",
+      "name": "If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$node[\"Set Vars\"].json[\"notifyWebhook\"]}}",
+        "method": "POST",
+        "jsonParameters": true,
+        "options": {
+          "timeout": 15000
+        },
+        "bodyParametersJson": "{\n  \"level\": \"ERROR\",\n  \"owner\": \"={{$json.owner}}\",\n  \"task\": \"={{$json.name}}\",\n  \"action\": \"={{$json.action}}\",\n  \"namespace\": \"={{$json.namespace}}\",\n  \"target\": \"={{$json.target}}\",\n  \"error\": \"={{$json.error?.message || $json.error || 'unknown error'}}\"\n}\n"
+      },
+      "id": "77777777-7777-7777-7777-777777777777",
+      "name": "Notify Failure (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1680,
+        140
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {},
+      "id": "88888888-8888-8888-8888-888888888888",
+      "name": "NoOp",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        360
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "99999999-9999-9999-9999-999999999999",
+      "name": "Next Batch",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1900,
+        260
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Vars",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Vars": {
+      "main": [
+        [
+          {
+            "node": "Build Task List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Task List": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Execute Action (HTTP placeholder)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Next Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Action (HTTP placeholder)": {
+      "main": [
+        [
+          {
+            "node": "If Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Failed": {
+      "main": [
+        [
+          {
+            "node": "Notify Failure (HTTP)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "NoOp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Failure (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Next Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NoOp": {
+      "main": [
+        [
+          {
+            "node": "Next Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next Batch": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionTimeout": 0,
+    "saveExecutionProgress": true
+  },
+  "tags": [
+    {
+      "name": "owner:OWNER_TEMPLATE"
+    },
+    {
+      "name": "type:k8s-ops"
+    },
+    {
+      "name": "biz:PLACEHOLDER"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

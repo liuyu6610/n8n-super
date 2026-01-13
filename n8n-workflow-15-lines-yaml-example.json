@@ -1,0 +1,1111 @@
+{
+  "name": "OPS-K8S-15-LINES-YAML-EXAMPLE",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "owner",
+              "value": "OWNER_TEMPLATE"
+            },
+            {
+              "name": "notifyWebhook",
+              "value": "https://example.com/notify-webhook"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-0000-0000-000000000001",
+      "name": "Global Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        520,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$node[\"Global Vars\"].json[\"notifyWebhook\"]}}",
+        "method": "POST",
+        "jsonParameters": true,
+        "options": {
+          "timeout": 15000
+        },
+        "bodyParametersJson": "{\n  \"level\": \"ERROR\",\n  \"owner\": \"={{$node['Global Vars'].json.owner}}\",\n  \"line\": \"={{$json.lineId}}\",\n  \"action\": \"={{$json.action}}\",\n  \"calendar\": \"={{$json.calendarKey}}\",\n  \"error\": \"={{$json.error?.message || $json.error || 'unknown error'}}\"\n}"
+      },
+      "id": "00000000-0000-0000-0000-000000000002",
+      "name": "Notify Failure (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        2680,
+        60
+      ],
+      "continueOnFail": true
+    },
+
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "10000000-0000-0000-0000-000000000001",
+      "name": "Line-01 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "lineId",
+              "value": "LINE-01"
+            },
+            {
+              "name": "calendarKey",
+              "value": "EXCHANGE_A_OPEN"
+            },
+            {
+              "name": "action",
+              "value": "apply"
+            },
+            {
+              "name": "yaml",
+              "value": "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: line-01-job\n  namespace: trade\nspec:\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: main\n          image: busybox\n          command: ['sh','-c','echo LINE-01']\n"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "10000000-0000-0000-0000-000000000002",
+      "name": "Line-01 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        520,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 交易日历判断占位：这里默认允许执行\n// 你后续可替换为：调用交易所日历HTTP接口/查询DB/按节假日表判断\nreturn [{ json: { ...$json, calendarOk: true } }];"
+      },
+      "id": "10000000-0000-0000-0000-000000000003",
+      "name": "Line-01 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        760,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.calendarOk}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "10000000-0000-0000-0000-000000000004",
+      "name": "Line-01 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}"
+      },
+      "id": "10000000-0000-0000-0000-000000000005",
+      "name": "Line-01 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        200
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.error !== undefined}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "10000000-0000-0000-0000-000000000006",
+      "name": "Line-01 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        200
+      ]
+    },
+
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "15 6 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "20000000-0000-0000-0000-000000000001",
+      "name": "Line-02 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "lineId", "value": "LINE-02" },
+            { "name": "calendarKey", "value": "EXCHANGE_A_MID" },
+            { "name": "action", "value": "apply" },
+            { "name": "yaml", "value": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: line-02-pod\n  namespace: trade\nspec:\n  containers:\n    - name: main\n      image: busybox\n      command: ['sh','-c','echo LINE-02']\n" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "20000000-0000-0000-0000-000000000002",
+      "name": "Line-02 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        520,
+        340
+      ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "20000000-0000-0000-0000-000000000003",
+      "name": "Line-02 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        760,
+        340
+      ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "20000000-0000-0000-0000-000000000004",
+      "name": "Line-02 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}"
+      },
+      "id": "20000000-0000-0000-0000-000000000005",
+      "name": "Line-02 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        340
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "20000000-0000-0000-0000-000000000006",
+      "name": "Line-02 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1480,
+        340
+      ]
+    },
+
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 7 * * 1-5" }
+          ]
+        }
+      },
+      "id": "30000000-0000-0000-0000-000000000001",
+      "name": "Line-03 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 480 ]
+    },
+    {
+      "parameters": {
+        "values": { "string": [
+          { "name": "lineId", "value": "LINE-03" },
+          { "name": "calendarKey", "value": "EXCHANGE_B_OPEN" },
+          { "name": "action", "value": "delete" },
+          { "name": "yaml", "value": "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: line-03-job\n  namespace: trade\n" }
+        ] },
+        "options": {}
+      },
+      "id": "30000000-0000-0000-0000-000000000002",
+      "name": "Line-03 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 480 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "30000000-0000-0000-0000-000000000003",
+      "name": "Line-03 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 480 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "30000000-0000-0000-0000-000000000004",
+      "name": "Line-03 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 480 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "30000000-0000-0000-0000-000000000005",
+      "name": "Line-03 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 480 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "30000000-0000-0000-0000-000000000006",
+      "name": "Line-03 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 480 ]
+    },
+
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "30 7 * * 1-5" }
+          ]
+        }
+      },
+      "id": "40000000-0000-0000-0000-000000000001",
+      "name": "Line-04 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 620 ]
+    },
+    {
+      "parameters": {
+        "values": { "string": [
+          { "name": "lineId", "value": "LINE-04" },
+          { "name": "calendarKey", "value": "EXCHANGE_A_CHECK_04" },
+          { "name": "action", "value": "apply" },
+          { "name": "yaml", "value": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: line-04-pod\n  namespace: trade\nspec:\n  containers:\n    - name: main\n      image: busybox\n      command: ['sh','-c','echo LINE-04']\n" }
+        ] },
+        "options": {}
+      },
+      "id": "40000000-0000-0000-0000-000000000002",
+      "name": "Line-04 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 620 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "40000000-0000-0000-0000-000000000003",
+      "name": "Line-04 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 620 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "40000000-0000-0000-0000-000000000004",
+      "name": "Line-04 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 620 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "40000000-0000-0000-0000-000000000005",
+      "name": "Line-04 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 620 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "40000000-0000-0000-0000-000000000006",
+      "name": "Line-04 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 620 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "0 8 * * 1-5" } ] } },
+      "id": "50000000-0000-0000-0000-000000000001",
+      "name": "Line-05 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 760 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-05" },
+        { "name": "calendarKey", "value": "EXCHANGE_A_DELETE_05" },
+        { "name": "action", "value": "delete" },
+        { "name": "yaml", "value": "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: line-05-job\n  namespace: trade\n" }
+      ] }, "options": {} },
+      "id": "50000000-0000-0000-0000-000000000002",
+      "name": "Line-05 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 760 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "50000000-0000-0000-0000-000000000003",
+      "name": "Line-05 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 760 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "50000000-0000-0000-0000-000000000004",
+      "name": "Line-05 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 760 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "50000000-0000-0000-0000-000000000005",
+      "name": "Line-05 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 760 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "50000000-0000-0000-0000-000000000006",
+      "name": "Line-05 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 760 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "30 8 * * 1-5" } ] } },
+      "id": "60000000-0000-0000-0000-000000000001",
+      "name": "Line-06 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 900 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-06" },
+        { "name": "calendarKey", "value": "EXCHANGE_B_APPLY_06" },
+        { "name": "action", "value": "apply" },
+        { "name": "yaml", "value": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: line-06-cm\n  namespace: trade\ndata:\n  key: value\n" }
+      ] }, "options": {} },
+      "id": "60000000-0000-0000-0000-000000000002",
+      "name": "Line-06 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 900 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "60000000-0000-0000-0000-000000000003",
+      "name": "Line-06 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 900 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "60000000-0000-0000-0000-000000000004",
+      "name": "Line-06 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 900 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "60000000-0000-0000-0000-000000000005",
+      "name": "Line-06 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 900 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "60000000-0000-0000-0000-000000000006",
+      "name": "Line-06 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 900 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "0 9 * * 1-5" } ] } },
+      "id": "70000000-0000-0000-0000-000000000001",
+      "name": "Line-07 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 1040 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-07" },
+        { "name": "calendarKey", "value": "EXCHANGE_A_APPLY_07" },
+        { "name": "action", "value": "apply" },
+        { "name": "yaml", "value": "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: line-07-job\n  namespace: trade\nspec:\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: main\n          image: busybox\n          command: ['sh','-c','echo LINE-07']\n" }
+      ] }, "options": {} },
+      "id": "70000000-0000-0000-0000-000000000002",
+      "name": "Line-07 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 1040 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "70000000-0000-0000-0000-000000000003",
+      "name": "Line-07 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 1040 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "70000000-0000-0000-0000-000000000004",
+      "name": "Line-07 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 1040 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "70000000-0000-0000-0000-000000000005",
+      "name": "Line-07 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 1040 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "70000000-0000-0000-0000-000000000006",
+      "name": "Line-07 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 1040 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "30 9 * * 1-5" } ] } },
+      "id": "80000000-0000-0000-0000-000000000001",
+      "name": "Line-08 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 1180 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-08" },
+        { "name": "calendarKey", "value": "EXCHANGE_A_DELETE_08" },
+        { "name": "action", "value": "delete" },
+        { "name": "yaml", "value": "apiVersion: v1\nkind: Service\nmetadata:\n  name: line-08-svc\n  namespace: trade\n" }
+      ] }, "options": {} },
+      "id": "80000000-0000-0000-0000-000000000002",
+      "name": "Line-08 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 1180 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "80000000-0000-0000-0000-000000000003",
+      "name": "Line-08 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 1180 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "80000000-0000-0000-0000-000000000004",
+      "name": "Line-08 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 1180 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "80000000-0000-0000-0000-000000000005",
+      "name": "Line-08 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 1180 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "80000000-0000-0000-0000-000000000006",
+      "name": "Line-08 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 1180 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "0 10 * * 1-5" } ] } },
+      "id": "90000000-0000-0000-0000-000000000001",
+      "name": "Line-09 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 1320 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-09" },
+        { "name": "calendarKey", "value": "EXCHANGE_B_APPLY_09" },
+        { "name": "action", "value": "apply" },
+        { "name": "yaml", "value": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: line-09-deploy\n  namespace: trade\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: line-09\n  template:\n    metadata:\n      labels:\n        app: line-09\n    spec:\n      containers:\n        - name: main\n          image: busybox\n          command: ['sh','-c','echo LINE-09 && sleep 3600']\n" }
+      ] }, "options": {} },
+      "id": "90000000-0000-0000-0000-000000000002",
+      "name": "Line-09 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 1320 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "90000000-0000-0000-0000-000000000003",
+      "name": "Line-09 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 1320 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "90000000-0000-0000-0000-000000000004",
+      "name": "Line-09 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 1320 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "90000000-0000-0000-0000-000000000005",
+      "name": "Line-09 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 1320 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "90000000-0000-0000-0000-000000000006",
+      "name": "Line-09 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 1320 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "30 10 * * 1-5" } ] } },
+      "id": "a0000000-0000-0000-0000-000000000001",
+      "name": "Line-10 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 1460 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-10" },
+        { "name": "calendarKey", "value": "EXCHANGE_A_DELETE_10" },
+        { "name": "action", "value": "delete" },
+        { "name": "yaml", "value": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: line-10-deploy\n  namespace: trade\n" }
+      ] }, "options": {} },
+      "id": "a0000000-0000-0000-0000-000000000002",
+      "name": "Line-10 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 1460 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "a0000000-0000-0000-0000-000000000003",
+      "name": "Line-10 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 1460 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "a0000000-0000-0000-0000-000000000004",
+      "name": "Line-10 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 1460 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "a0000000-0000-0000-0000-000000000005",
+      "name": "Line-10 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 1460 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "a0000000-0000-0000-0000-000000000006",
+      "name": "Line-10 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 1460 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "0 11 * * 1-5" } ] } },
+      "id": "b0000000-0000-0000-0000-000000000001",
+      "name": "Line-11 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 1600 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-11" },
+        { "name": "calendarKey", "value": "EXCHANGE_B_APPLY_11" },
+        { "name": "action", "value": "apply" },
+        { "name": "yaml", "value": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: line-11-ns\n" }
+      ] }, "options": {} },
+      "id": "b0000000-0000-0000-0000-000000000002",
+      "name": "Line-11 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 1600 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "b0000000-0000-0000-0000-000000000003",
+      "name": "Line-11 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 1600 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "b0000000-0000-0000-0000-000000000004",
+      "name": "Line-11 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 1600 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "b0000000-0000-0000-0000-000000000005",
+      "name": "Line-11 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 1600 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "b0000000-0000-0000-0000-000000000006",
+      "name": "Line-11 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 1600 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "30 11 * * 1-5" } ] } },
+      "id": "c0000000-0000-0000-0000-000000000001",
+      "name": "Line-12 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 1740 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-12" },
+        { "name": "calendarKey", "value": "EXCHANGE_A_DELETE_12" },
+        { "name": "action", "value": "delete" },
+        { "name": "yaml", "value": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: line-12-ns\n" }
+      ] }, "options": {} },
+      "id": "c0000000-0000-0000-0000-000000000002",
+      "name": "Line-12 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 1740 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "c0000000-0000-0000-0000-000000000003",
+      "name": "Line-12 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 1740 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "c0000000-0000-0000-0000-000000000004",
+      "name": "Line-12 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 1740 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "c0000000-0000-0000-0000-000000000005",
+      "name": "Line-12 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 1740 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "c0000000-0000-0000-0000-000000000006",
+      "name": "Line-12 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 1740 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "0 12 * * 1-5" } ] } },
+      "id": "d0000000-0000-0000-0000-000000000001",
+      "name": "Line-13 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 1880 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-13" },
+        { "name": "calendarKey", "value": "EXCHANGE_B_APPLY_13" },
+        { "name": "action", "value": "apply" },
+        { "name": "yaml", "value": "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: line-13-job\n  namespace: trade\nspec:\n  template:\n    spec:\n      restartPolicy: Never\n      containers:\n        - name: main\n          image: busybox\n          command: ['sh','-c','echo LINE-13']\n" }
+      ] }, "options": {} },
+      "id": "d0000000-0000-0000-0000-000000000002",
+      "name": "Line-13 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 1880 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "d0000000-0000-0000-0000-000000000003",
+      "name": "Line-13 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 1880 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "d0000000-0000-0000-0000-000000000004",
+      "name": "Line-13 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 1880 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "d0000000-0000-0000-0000-000000000005",
+      "name": "Line-13 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 1880 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "d0000000-0000-0000-0000-000000000006",
+      "name": "Line-13 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 1880 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "30 12 * * 1-5" } ] } },
+      "id": "e0000000-0000-0000-0000-000000000001",
+      "name": "Line-14 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 2020 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-14" },
+        { "name": "calendarKey", "value": "EXCHANGE_A_DELETE_14" },
+        { "name": "action", "value": "delete" },
+        { "name": "yaml", "value": "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: line-14-job\n  namespace: trade\n" }
+      ] }, "options": {} },
+      "id": "e0000000-0000-0000-0000-000000000002",
+      "name": "Line-14 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 2020 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "e0000000-0000-0000-0000-000000000003",
+      "name": "Line-14 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 2020 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "e0000000-0000-0000-0000-000000000004",
+      "name": "Line-14 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 2020 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "e0000000-0000-0000-0000-000000000005",
+      "name": "Line-14 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 2020 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "e0000000-0000-0000-0000-000000000006",
+      "name": "Line-14 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 2020 ]
+    },
+
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "0 13 * * 1-5" } ] } },
+      "id": "f0000000-0000-0000-0000-000000000001",
+      "name": "Line-15 Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [ 260, 2160 ]
+    },
+    {
+      "parameters": { "values": { "string": [
+        { "name": "lineId", "value": "LINE-15" },
+        { "name": "calendarKey", "value": "EXCHANGE_B_APPLY_15" },
+        { "name": "action", "value": "apply" },
+        { "name": "yaml", "value": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: line-15-pod\n  namespace: trade\nspec:\n  containers:\n    - name: main\n      image: busybox\n      command: ['sh','-c','echo LINE-15']\n" }
+      ] }, "options": {} },
+      "id": "f0000000-0000-0000-0000-000000000002",
+      "name": "Line-15 Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [ 520, 2160 ]
+    },
+    {
+      "parameters": { "functionCode": "return [{ json: { ...$json, calendarOk: true } }];" },
+      "id": "f0000000-0000-0000-0000-000000000003",
+      "name": "Line-15 Calendar Gate",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [ 760, 2160 ]
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.calendarOk}}", "value2": true } ] } },
+      "id": "f0000000-0000-0000-0000-000000000004",
+      "name": "Line-15 If Calendar OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1000, 2160 ]
+    },
+    {
+      "parameters": { "command": "={{$json.action === 'apply' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl apply -f -') : ($json.action === 'delete' ? ('echo ' + JSON.stringify($json.yaml) + ' | kubectl delete -f -') : ('echo ACTION_NOT_IMPLEMENTED'))}}" },
+      "id": "f0000000-0000-0000-0000-000000000005",
+      "name": "Line-15 Execute YAML (kubectl)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 1240, 2160 ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": { "conditions": { "boolean": [ { "value1": "={{$json.error !== undefined}}", "value2": true } ] } },
+      "id": "f0000000-0000-0000-0000-000000000006",
+      "name": "Line-15 If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [ 1480, 2160 ]
+    }
+
+  ],
+  "connections": {
+    "Line-01 Schedule": { "main": [ [ { "node": "Line-01 Context", "type": "main", "index": 0 } ] ] },
+    "Line-01 Context": { "main": [ [ { "node": "Line-01 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-01 Calendar Gate": { "main": [ [ { "node": "Line-01 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-01 If Calendar OK": { "main": [ [ { "node": "Line-01 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-01 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-01 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-01 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-02 Schedule": { "main": [ [ { "node": "Line-02 Context", "type": "main", "index": 0 } ] ] },
+    "Line-02 Context": { "main": [ [ { "node": "Line-02 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-02 Calendar Gate": { "main": [ [ { "node": "Line-02 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-02 If Calendar OK": { "main": [ [ { "node": "Line-02 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-02 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-02 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-02 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-03 Schedule": { "main": [ [ { "node": "Line-03 Context", "type": "main", "index": 0 } ] ] },
+    "Line-03 Context": { "main": [ [ { "node": "Line-03 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-03 Calendar Gate": { "main": [ [ { "node": "Line-03 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-03 If Calendar OK": { "main": [ [ { "node": "Line-03 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-03 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-03 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-03 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-04 Schedule": { "main": [ [ { "node": "Line-04 Context", "type": "main", "index": 0 } ] ] },
+    "Line-04 Context": { "main": [ [ { "node": "Line-04 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-04 Calendar Gate": { "main": [ [ { "node": "Line-04 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-04 If Calendar OK": { "main": [ [ { "node": "Line-04 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-04 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-04 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-04 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-05 Schedule": { "main": [ [ { "node": "Line-05 Context", "type": "main", "index": 0 } ] ] },
+    "Line-05 Context": { "main": [ [ { "node": "Line-05 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-05 Calendar Gate": { "main": [ [ { "node": "Line-05 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-05 If Calendar OK": { "main": [ [ { "node": "Line-05 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-05 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-05 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-05 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-06 Schedule": { "main": [ [ { "node": "Line-06 Context", "type": "main", "index": 0 } ] ] },
+    "Line-06 Context": { "main": [ [ { "node": "Line-06 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-06 Calendar Gate": { "main": [ [ { "node": "Line-06 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-06 If Calendar OK": { "main": [ [ { "node": "Line-06 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-06 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-06 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-06 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-07 Schedule": { "main": [ [ { "node": "Line-07 Context", "type": "main", "index": 0 } ] ] },
+    "Line-07 Context": { "main": [ [ { "node": "Line-07 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-07 Calendar Gate": { "main": [ [ { "node": "Line-07 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-07 If Calendar OK": { "main": [ [ { "node": "Line-07 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-07 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-07 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-07 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-08 Schedule": { "main": [ [ { "node": "Line-08 Context", "type": "main", "index": 0 } ] ] },
+    "Line-08 Context": { "main": [ [ { "node": "Line-08 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-08 Calendar Gate": { "main": [ [ { "node": "Line-08 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-08 If Calendar OK": { "main": [ [ { "node": "Line-08 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-08 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-08 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-08 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-09 Schedule": { "main": [ [ { "node": "Line-09 Context", "type": "main", "index": 0 } ] ] },
+    "Line-09 Context": { "main": [ [ { "node": "Line-09 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-09 Calendar Gate": { "main": [ [ { "node": "Line-09 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-09 If Calendar OK": { "main": [ [ { "node": "Line-09 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-09 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-09 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-09 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-10 Schedule": { "main": [ [ { "node": "Line-10 Context", "type": "main", "index": 0 } ] ] },
+    "Line-10 Context": { "main": [ [ { "node": "Line-10 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-10 Calendar Gate": { "main": [ [ { "node": "Line-10 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-10 If Calendar OK": { "main": [ [ { "node": "Line-10 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-10 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-10 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-10 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-11 Schedule": { "main": [ [ { "node": "Line-11 Context", "type": "main", "index": 0 } ] ] },
+    "Line-11 Context": { "main": [ [ { "node": "Line-11 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-11 Calendar Gate": { "main": [ [ { "node": "Line-11 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-11 If Calendar OK": { "main": [ [ { "node": "Line-11 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-11 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-11 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-11 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-12 Schedule": { "main": [ [ { "node": "Line-12 Context", "type": "main", "index": 0 } ] ] },
+    "Line-12 Context": { "main": [ [ { "node": "Line-12 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-12 Calendar Gate": { "main": [ [ { "node": "Line-12 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-12 If Calendar OK": { "main": [ [ { "node": "Line-12 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-12 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-12 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-12 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-13 Schedule": { "main": [ [ { "node": "Line-13 Context", "type": "main", "index": 0 } ] ] },
+    "Line-13 Context": { "main": [ [ { "node": "Line-13 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-13 Calendar Gate": { "main": [ [ { "node": "Line-13 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-13 If Calendar OK": { "main": [ [ { "node": "Line-13 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-13 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-13 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-13 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-14 Schedule": { "main": [ [ { "node": "Line-14 Context", "type": "main", "index": 0 } ] ] },
+    "Line-14 Context": { "main": [ [ { "node": "Line-14 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-14 Calendar Gate": { "main": [ [ { "node": "Line-14 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-14 If Calendar OK": { "main": [ [ { "node": "Line-14 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-14 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-14 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-14 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Line-15 Schedule": { "main": [ [ { "node": "Line-15 Context", "type": "main", "index": 0 } ] ] },
+    "Line-15 Context": { "main": [ [ { "node": "Line-15 Calendar Gate", "type": "main", "index": 0 } ] ] },
+    "Line-15 Calendar Gate": { "main": [ [ { "node": "Line-15 If Calendar OK", "type": "main", "index": 0 } ] ] },
+    "Line-15 If Calendar OK": { "main": [ [ { "node": "Line-15 Execute YAML (kubectl)", "type": "main", "index": 0 } ], [] ] },
+    "Line-15 Execute YAML (kubectl)": { "main": [ [ { "node": "Line-15 If Failed", "type": "main", "index": 0 } ] ] },
+    "Line-15 If Failed": { "main": [ [ { "node": "Notify Failure (HTTP)", "type": "main", "index": 0 } ], [] ] },
+
+    "Global Vars": { "main": [] }
+  },
+  "active": false,
+  "settings": { "executionTimeout": 0, "saveExecutionProgress": true },
+  "tags": [
+    { "name": "owner:OWNER_TEMPLATE" },
+    { "name": "type:k8s-ops" },
+    { "name": "example:15-lines" }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}
