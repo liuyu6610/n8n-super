@@ -1,0 +1,319 @@
+image:
+  repository: crpi-n5rumpjwbqinoz4c.cn-hangzhou.personal.cr.aliyuncs.com/n8nioliuyu/n8n
+  tag: "super-1.78.1"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+timezone: "Asia/Shanghai"
+
+log:
+  level: info
+  output:
+    - console
+
+# 资源配置（生产建议）：可按集群资源情况继续上调/下调
+# 说明：
+# - requests 影响调度与预留
+# - limits 影响容器上限（过低会 CPU throttle / OOM）
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "2048Mi"
+  limits:
+    cpu: "2000m"
+    memory: "4096Mi"
+
+# 强制使用同一个 Secret（由 Helm 创建/管理，无需手工创建）
+# Secret 会由 templates/secret.yaml 在 oneSecret.enabled=true 时自动创建/复用，包含如下 key：
+# - N8N_ENCRYPTION_KEY
+# - postgres-password
+# - redis-username
+# - redis-password
+existingEncryptionKeySecret: "n8n-secret"
+
+oneSecret:
+  enabled: true
+  name: "n8n-secret"
+  encryptionKey: ""
+  postgresPassword: ""
+  redisUsername: "default"
+  redisPassword: ""
+
+externalPostgresql:
+  existingSecret: "n8n-secret"
+
+db:
+  type: postgresdb
+  postgresdb:
+    poolSize: 10
+    connectionTimeout: 20000
+    idleConnectionTimeout: 30000
+    schema: public
+    ssl:
+      enabled: false
+
+diagnostics:
+  enabled: false
+
+versionNotifications:
+  enabled: false
+
+api:
+  enabled: false
+  path: api
+  swagger:
+    enabled: false
+
+# 禁止运行时安装社区节点/外部 npm（内网环境避免联网依赖）
+nodes:
+  builtin:
+    enabled: false
+    modules: []
+  external:
+    allowAll: false
+    reinstallMissingPackages: false
+    packages: []
+
+npmRegistry:
+  enabled: false
+  url: ""
+  secretName: ""
+  secretKey: "npmrc"
+  customNpmrc: ""
+
+# queue 模式：main/worker/webhook 分离
+main:
+  count: 1
+  editorBaseUrl: "http://n8n-it.saturn-res.ipa.zs"
+  resources:
+    requests:
+      cpu: "2000m"
+      memory: "4096Mi"
+    limits:
+      cpu: "4000m"
+      memory: "8192Mi"
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 300
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /healthz/readiness
+      port: http
+    initialDelaySeconds: 300
+    periodSeconds: 10
+    failureThreshold: 3
+  extraEnvVars:
+    TZ: "Asia/Shanghai"
+    GENERIC_TIMEZONE: "Asia/Shanghai"
+    N8N_TRUST_PROXY: "true"
+    N8N_PROTOCOL: "http"
+    N8N_HOST: "n8n-it.saturn-res.ipa.zs"
+    N8N_PUSH_BACKEND: "websocket"
+    EXECUTIONS_MODE: "queue"
+
+  # 不再把 PVC 挂载到 /home/node/.n8n（会覆盖镜像内预装的社区节点，导致 worker/webhook ENOENT）
+  persistence:
+    enabled: false
+    mountPath: "/home/node/.n8n"
+    storageClass: "it"
+    size: 10Gi
+    accessMode: ReadWriteOnce
+
+sharedPersistence:
+  # 只用于 Python venv 缓存（pyenvs），实现“下载一次、多副本复用”，避免覆盖 /home/node/.n8n
+  enabled: true
+  existingClaim: ""
+  mountPath: "/home/node/.n8n/pyenvs"
+  subPath: ""
+  # 该 volumeName 会作为各 Deployment/StatefulSet 中的 volume 名称
+  volumeName: "pyenvs-cache"
+  storageClass: "it"
+  accessMode: ReadWriteMany
+  size: 10Gi
+
+n8nSuper:
+  enabled: true
+  configFilePath: "/etc/n8n-super.env"
+  # 额外 env（会注入到 main/worker/webhook 以及 external task runner sidecar）
+  env:
+    N8N_PIP_INDEX_URL: "https://pypi.tuna.tsinghua.edu.cn/simple"
+    N8N_PIP_TRUSTED_HOST: "pypi.tuna.tsinghua.edu.cn"
+    N8N_PIP_EXTRA_INDEX_URL: ""
+    N8N_PIP_DEFAULT_TIMEOUT: "60"
+    N8N_PYTHON_AUTO_INSTALL: "true"
+    N8N_PYTHON_REQUIREMENTS_FILE: "/home/node/.n8n/pyenvs/requirements.txt"
+    N8N_PYTHON_VENV_CACHE_DIR: "/home/node/.n8n/pyenvs"
+  # 若你启用了 taskRunners.mode=external，且希望 runner sidecar 也 source 同一份配置文件，开启该开关
+  sourceConfigFileInTaskRunner: true
+  files:
+    n8nSuperEnv: |-
+      # n8n-super 启动自定义配置（会被 /docker-entrypoint-extra.sh 在启动时加载）
+
+      # pip 镜像源（按需填充；也可直接写死内网源）
+      N8N_PIP_INDEX_URL="${N8N_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+      N8N_PIP_TRUSTED_HOST="${N8N_PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
+      N8N_PIP_EXTRA_INDEX_URL="${N8N_PIP_EXTRA_INDEX_URL:-}"
+      N8N_PIP_DEFAULT_TIMEOUT="${N8N_PIP_DEFAULT_TIMEOUT:-60}"
+
+      # Python 运行时自动安装依赖
+      N8N_PYTHON_AUTO_INSTALL="${N8N_PYTHON_AUTO_INSTALL:-true}"
+
+      # requirements 挂载路径（与 sharedPersistence.mountPath 对齐）
+      N8N_PYTHON_REQUIREMENTS_FILE="${N8N_PYTHON_REQUIREMENTS_FILE:-/home/node/.n8n/requirements.txt}"
+
+      # venv 缓存目录（共享 PVC 下，便于多副本复用）
+      N8N_PYTHON_VENV_CACHE_DIR="${N8N_PYTHON_VENV_CACHE_DIR:-/home/node/.n8n/pyenvs}"
+
+      # 可选：启动时清理旧 venv 缓存（默认不清理）
+      # N8N_PYTHON_VENV_CACHE_CLEANUP="true"
+      # N8N_PYTHON_VENV_CACHE_TTL_DAYS="30"
+
+      # 如镜像内安装了 chromium，则可显式指定 puppeteer 路径
+      PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-/usr/bin/chromium}"
+
+    requirementsTxt: |-
+      requests==2.32.3
+      PyYAML==6.0.2
+      pandas==2.2.3
+      numpy==2.2.3
+      python-gitlab==5.3.0
+      openpyxl==3.1.5
+      pytz==2025.1
+      python-dateutil==2.9.0
+
+worker:
+  mode: queue
+  count: 2
+  concurrency: 10
+  resources:
+    requests:
+      cpu: "2000m"
+      memory: "4096Mi"
+    limits:
+      cpu: "4000m"
+      memory: "8192Mi"
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 300
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /healthz/readiness
+      port: http
+    initialDelaySeconds: 300
+    periodSeconds: 10
+    failureThreshold: 3
+  extraEnvVars:
+    TZ: "Asia/Shanghai"
+    GENERIC_TIMEZONE: "Asia/Shanghai"
+
+webhook:
+  mode: queue
+  count: 1
+  url: "http://n8n-it.saturn-res.ipa.zs/"
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2048Mi"
+    limits:
+      cpu: "2000m"
+      memory: "4096Mi"
+  extraEnvVars:
+    TZ: "Asia/Shanghai"
+    GENERIC_TIMEZONE: "Asia/Shanghai"
+
+taskRunners:
+  mode: internal
+  external:
+    image:
+      repository: crpi-n5rumpjwbqinoz4c.cn-hangzhou.personal.cr.aliyuncs.com/n8nioliuyu/n8n
+      tag: "super-1.78.1"
+      pullPolicy: IfNotPresent
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+  hosts:
+    - host: n8n-it.saturn-res.ipa.zs
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: n8n-it-tls
+      hosts:
+        - n8n-it.saturn-res.ipa.zs
+
+# Redis（队列必需）
+redis:
+  enabled: true
+  architecture: standalone
+  global:
+    imageRegistry: "nexus2.ipa.zs:5000"
+    security:
+      allowInsecureImages: true
+  image:
+    registry: "nexus2.ipa.zs:5000"
+    repository: bitnamilegacy/redis
+    tag: latest
+  auth:
+    enabled: true
+    existingSecret: "n8n-secret"
+  master:
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1024Mi"
+      limits:
+        cpu: "1000m"
+        memory: "2048Mi"
+    persistence:
+      enabled: true
+      storageClass: "it"
+      size: 4Gi
+
+externalRedis:
+  existingSecret: "n8n-secret"
+  database: 0
+  host: ""
+  port: 6379
+
+# PostgreSQL（生产必需）
+postgresql:
+  enabled: true
+  architecture: standalone
+  global:
+    imageRegistry: "nexus2.ipa.zs:5000"
+    security:
+      allowInsecureImages: true
+  image:
+    registry: "nexus2.ipa.zs:5000"
+    repository: bitnamilegacy/postgresql
+    tag: latest
+  auth:
+    username: ""
+    database: "n8n"
+    existingSecret: "n8n-secret"
+  primary:
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "2048Mi"
+      limits:
+        cpu: "2000m"
+        memory: "4096Mi"
+    persistence:
+      storageClass: "it"
