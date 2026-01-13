@@ -1,7 +1,3 @@
-# 生产环境 Helm Values（n8n-chart）
-# 目标：queue 模式（main+worker+webhook）、使用 n8n-super 镜像、内置 Redis+PostgreSQL、并强制所有密钥/密码统一使用同一个 existingSecret
-# 兼容：Kubernetes 1.20+ / n8n 1.78.x（按需调整）
-
 image:
   repository: crpi-n5rumpjwbqinoz4c.cn-hangzhou.personal.cr.aliyuncs.com/n8nioliuyu/n8n
   tag: "super-1.78.1"
@@ -16,11 +12,12 @@ log:
   output:
     - console
 
-# 强制使用同一个 Secret（必须预先创建）
-# 该 Secret 需要至少包含如下 key：
-# - N8N_ENCRYPTION_KEY: n8n 加密密钥（必须固定，否则重装后会因密钥不匹配导致凭据解密失败/启动报错）
-# - postgres-password: PostgreSQL 密码（若使用 postgres 用户）
-# - redis-password: Redis 密码
+# 强制使用同一个 Secret（由 Helm 创建/管理，无需手工创建）
+# Secret 会由 templates/secret.yaml 在 oneSecret.enabled=true 时自动创建/复用，包含如下 key：
+# - N8N_ENCRYPTION_KEY
+# - postgres-password
+# - redis-username
+# - redis-password
 existingEncryptionKeySecret: "n8n-one-secret"
 
 oneSecret:
@@ -31,7 +28,9 @@ oneSecret:
   redisUsername: "default"
   redisPassword: ""
 
-# n8n 数据库：使用 Postgres（生产推荐）
+externalPostgresql:
+  existingSecret: "n8n-one-secret"
+
 db:
   type: postgresdb
   postgresdb:
@@ -42,14 +41,12 @@ db:
     ssl:
       enabled: false
 
-# 关闭遥测/版本提示（离线/内网更稳）
 diagnostics:
   enabled: false
 
 versionNotifications:
   enabled: false
 
-# 关闭 Public API（减少暴露面，如需再开）
 api:
   enabled: false
   path: api
@@ -73,12 +70,10 @@ npmRegistry:
   secretKey: "npmrc"
   customNpmrc: ""
 
-# main/worker/webhook 分离（queue 模式）
+# queue 模式：main/worker/webhook 分离
 main:
   count: 1
-  # 注意：如开启 ingress 并有域名，请同步设置 editorBaseUrl / N8N_HOST / N8N_PROTOCOL
   editorBaseUrl: "http://n8n-it.saturn-res.ipa.zs"
-
   extraEnvVars:
     TZ: "Asia/Shanghai"
     GENERIC_TIMEZONE: "Asia/Shanghai"
@@ -86,11 +81,9 @@ main:
     N8N_PROTOCOL: "http"
     N8N_HOST: "n8n-it.saturn-res.ipa.zs"
     N8N_PUSH_BACKEND: "websocket"
-    # 明确 queue（虽然 chart 会在 queue-configmap 里写，但显式写更直观）
     EXECUTIONS_MODE: "queue"
 
-  # n8n 主数据目录（工作流/凭据/配置等）
-  # 为了测试使用 kubectl apply rendered.yaml，这里改为由 chart 创建 PVC，并显式指定 storageClass
+  # 兼容保留：sharedPersistence.enabled=true 时实际以 shared PVC 为准
   persistence:
     enabled: true
     mountPath: "/home/node/.n8n"
@@ -103,6 +96,7 @@ sharedPersistence:
   existingClaim: ""
   mountPath: "/home/node/.n8n"
   subPath: ""
+  # 该 volumeName 会作为各 Deployment/StatefulSet 中的 volume 名称
   volumeName: "node-modules"
   storageClass: "it"
   accessMode: ReadWriteMany
@@ -111,33 +105,44 @@ sharedPersistence:
 n8nSuper:
   enabled: true
   configFilePath: "/etc/n8n-super.env"
-  env: {}
+  # 额外 env（会注入到 main/worker/webhook 以及 external task runner sidecar）
+  env:
+    N8N_PIP_INDEX_URL: "https://pypi.tuna.tsinghua.edu.cn/simple"
+    N8N_PIP_TRUSTED_HOST: "pypi.tuna.tsinghua.edu.cn"
+    N8N_PIP_EXTRA_INDEX_URL: ""
+    N8N_PIP_DEFAULT_TIMEOUT: "60"
+    N8N_PYTHON_AUTO_INSTALL: "true"
+    N8N_PYTHON_REQUIREMENTS_FILE: "/home/node/.n8n/requirements.txt"
+    N8N_PYTHON_VENV_CACHE_DIR: "/home/node/.n8n/pyenvs"
+  # 若你启用了 taskRunners.mode=external，且希望 runner sidecar 也 source 同一份配置文件，开启该开关
+  sourceConfigFileInTaskRunner: true
   files:
     n8nSuperEnv: |-
       # n8n-super 启动自定义配置（会被 /docker-entrypoint-extra.sh 在启动时加载）
 
-      # 公开 pip 镜像源（清华 TUNA）
-      N8N_PIP_INDEX_URL="${N8N_PIP_INDEX_URL:-}"
-      N8N_PIP_TRUSTED_HOST="${N8N_PIP_TRUSTED_HOST:-}"
+      # pip 镜像源（按需填充；也可直接写死内网源）
+      N8N_PIP_INDEX_URL="${N8N_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
+      N8N_PIP_TRUSTED_HOST="${N8N_PIP_TRUSTED_HOST:-pypi.tuna.tsinghua.edu.cn}"
+      N8N_PIP_EXTRA_INDEX_URL="${N8N_PIP_EXTRA_INDEX_URL:-}"
+      N8N_PIP_DEFAULT_TIMEOUT="${N8N_PIP_DEFAULT_TIMEOUT:-60}"
 
-      # PythonFunction 运行时自动安装依赖
+      # Python 运行时自动安装依赖
       N8N_PYTHON_AUTO_INSTALL="${N8N_PYTHON_AUTO_INSTALL:-true}"
 
-      # 使用 requirements 文件方式（该文件会通过 docker-compose 挂载到容器内）
+      # requirements 挂载路径（与 sharedPersistence.mountPath 对齐）
       N8N_PYTHON_REQUIREMENTS_FILE="${N8N_PYTHON_REQUIREMENTS_FILE:-/home/node/.n8n/requirements.txt}"
 
-      # 多人/多工作流推荐：按依赖 hash 独立 venv 缓存目录
+      # venv 缓存目录（共享 PVC 下，便于多副本复用）
       N8N_PYTHON_VENV_CACHE_DIR="${N8N_PYTHON_VENV_CACHE_DIR:-/home/node/.n8n/pyenvs}"
 
       # 可选：启动时清理旧 venv 缓存（默认不清理）
       # N8N_PYTHON_VENV_CACHE_CLEANUP="true"
       # N8N_PYTHON_VENV_CACHE_TTL_DAYS="30"
+
+      # 如镜像内安装了 chromium，则可显式指定 puppeteer 路径
       PUPPETEER_EXECUTABLE_PATH="${PUPPETEER_EXECUTABLE_PATH:-/usr/bin/chromium}"
 
-      # 如需额外 pip 参数（代理/额外源/证书等）可在此设置
-      # N8N_PYTHON_PIP_EXTRA_ARGS="${N8N_PYTHON_PIP_EXTRA_ARGS:-}"
     requirementsTxt: |-
-      # 团队常用Python包（构建时预装到基础venv）
       requests==2.32.3
       PyYAML==6.0.2
       pandas==2.2.3
@@ -147,52 +152,30 @@ n8nSuper:
       pytz==2025.1
       python-dateutil==2.9.0
 
-  resources:
-    requests:
-      cpu: "500m"
-      memory: 1Gi
-    limits:
-      cpu: "2"
-      memory: 4Gi
-
 worker:
   mode: queue
-  count: 10
-  # worker 一般不需要持久化；如你的任务需要本地文件缓存/二进制落盘，可单独开启 worker.persistence
+  count: 2
+  concurrency: 10
   extraEnvVars:
     TZ: "Asia/Shanghai"
     GENERIC_TIMEZONE: "Asia/Shanghai"
-
-  persistence:
-    enabled: false
-
-  resources:
-    requests:
-      cpu: "500m"
-      memory: 1Gi
-    limits:
-      cpu: "2"
-      memory: 4Gi
 
 webhook:
   mode: queue
   count: 1
-  # webhook.url 用于生成回调 URL（建议与你的外部访问地址一致）
   url: "http://n8n-it.saturn-res.ipa.zs/"
-
   extraEnvVars:
     TZ: "Asia/Shanghai"
     GENERIC_TIMEZONE: "Asia/Shanghai"
 
-  resources:
-    requests:
-      cpu: "200m"
-      memory: 512Mi
-    limits:
-      cpu: "1"
-      memory: 2Gi
+taskRunners:
+  mode: internal
+  external:
+    image:
+      repository: crpi-n5rumpjwbqinoz4c.cn-hangzhou.personal.cr.aliyuncs.com/n8nioliuyu/n8n
+      tag: "super-1.78.1"
+      pullPolicy: IfNotPresent
 
-# Ingress（按需开启）
 ingress:
   enabled: true
   className: nginx
@@ -207,10 +190,12 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-  tls: []
+  tls:
+    - secretName: n8n-it-tls
+      hosts:
+        - n8n-it.saturn-res.ipa.zs
 
 # Redis（队列必需）
-# 这里既启用 chart 内置 Redis，又让 n8n 读取 externalRedis.existingSecret（统一密钥来源）
 redis:
   enabled: true
   architecture: standalone
@@ -225,19 +210,15 @@ redis:
   auth:
     enabled: true
     existingSecret: "n8n-one-secret"
-
   master:
     persistence:
       enabled: true
       storageClass: "it"
       size: 4Gi
 
-# n8n 应用侧读取 Redis 认证信息（统一 secret）
 externalRedis:
   existingSecret: "n8n-one-secret"
-  # 与 Redis 子 chart 保持一致的逻辑库（Bull queue）
   database: 0
-  # host/port 在 redis.enabled=true 时会自动使用 release-redis-master
   host: ""
   port: 6379
 
@@ -254,24 +235,6 @@ postgresql:
     repository: bitnamilegacy/postgresql
     tag: latest
   auth:
-    # 使用 postgres 管理用户（username 为空会走 postgres-password key）
     username: ""
     database: "n8n"
     existingSecret: "n8n-one-secret"
-
-  primary:
-    persistence:
-      enabled: true
-      storageClass: "it"
-      size: 20Gi
-
-# n8n 应用侧读取 Postgres 密码（统一 secret）
-externalPostgresql:
-  existingSecret: "n8n-one-secret"
-  host: ""
-  port: 5432
-  database: "n8n"
-
-# 监控按需开启
-serviceMonitor:
-  enabled: false

@@ -159,14 +159,14 @@ spec:
               value: {{ .Values.timezone | quote }}
             - name: N8N_GRACEFUL_SHUTDOWN_TIMEOUT
               value: {{ .Values.gracefulShutdownTimeout | quote }}
-          {{- if .Values.n8nSuper.enabled }}
+            {{ if .Values.n8nSuper.enabled }}
             - name: N8N_SUPER_CONFIG_FILE
               value: {{ .Values.n8nSuper.configFilePath | quote }}
-          {{- range $key, $value := .Values.n8nSuper.env }}
+            {{ range $key, $value := .Values.n8nSuper.env }}
             - name: {{ upper $key }}
               value: {{ $value | quote }}
-          {{- end }}
-          {{- end }}
+            {{ end }}
+            {{ end }}
             - name: N8N_DISABLE_UI
               value: "true"
             - name: QUEUE_HEALTH_CHECK_ACTIVE
@@ -280,8 +280,8 @@ spec:
           volumeMounts:
           {{- end }}
           {{- if and (or .Values.nodes.external.packages .Values.worker.persistence.enabled .Values.sharedPersistence.enabled) (eq .Values.taskRunners.mode "internal") }}
-            - name: {{- if .Values.sharedPersistence.enabled -}}{{ include "n8n.sharedPersistence.volumeName" . }}{{- else -}}{{ default "node-modules" .Values.worker.persistence.volumeName }}{{- end }}
-              mountPath: {{- if .Values.sharedPersistence.enabled -}}{{ include "n8n.sharedPersistence.mountPath" . }}{{- else -}}{{ .Values.worker.persistence.mountPath }}{{- end }}
+            - name: {{ if .Values.sharedPersistence.enabled }}{{ include "n8n.sharedPersistence.volumeName" . }}{{ else }}{{ default "node-modules" .Values.worker.persistence.volumeName }}{{ end }}
+              mountPath: {{ if .Values.sharedPersistence.enabled }}{{ include "n8n.sharedPersistence.mountPath" . }}{{ else }}{{ .Values.worker.persistence.mountPath }}{{ end }}
               {{- if .Values.sharedPersistence.enabled }}
               {{- if (include "n8n.sharedPersistence.subPath" .) }}
               subPath: {{ include "n8n.sharedPersistence.subPath" . }}
@@ -390,8 +390,8 @@ spec:
                 name: {{ template "n8n.taskRunners.fullname" . }}-configmap
           {{- if or .Values.nodes.external.packages .Values.worker.persistence.enabled .Values.sharedPersistence.enabled }}
           volumeMounts:
-            - name: {{- if .Values.sharedPersistence.enabled -}}{{ include "n8n.sharedPersistence.volumeName" . }}{{- else -}}{{ default "node-modules" .Values.worker.persistence.volumeName }}{{- end }}
-              mountPath: {{- if .Values.sharedPersistence.enabled -}}{{ include "n8n.sharedPersistence.mountPath" . }}{{- else -}}{{ .Values.worker.persistence.mountPath }}{{- end }}
+            - name: {{ if .Values.sharedPersistence.enabled }}{{ include "n8n.sharedPersistence.volumeName" . }}{{ else }}{{ default "node-modules" .Values.worker.persistence.volumeName }}{{ end }}
+              mountPath: {{ if .Values.sharedPersistence.enabled }}{{ include "n8n.sharedPersistence.mountPath" . }}{{ else }}{{ .Values.worker.persistence.mountPath }}{{ end }}
               {{- if .Values.sharedPersistence.enabled }}
               {{- if (include "n8n.sharedPersistence.subPath" .) }}
               subPath: {{ include "n8n.sharedPersistence.subPath" . }}
