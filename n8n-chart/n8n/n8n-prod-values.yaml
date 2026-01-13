@@ -12,24 +12,36 @@ log:
   output:
     - console
 
+# 资源配置（生产建议）：可按集群资源情况继续上调/下调
+# 说明：
+# - requests 影响调度与预留
+# - limits 影响容器上限（过低会 CPU throttle / OOM）
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "2048Mi"
+  limits:
+    cpu: "2000m"
+    memory: "4096Mi"
+
 # 强制使用同一个 Secret（由 Helm 创建/管理，无需手工创建）
 # Secret 会由 templates/secret.yaml 在 oneSecret.enabled=true 时自动创建/复用，包含如下 key：
 # - N8N_ENCRYPTION_KEY
 # - postgres-password
 # - redis-username
 # - redis-password
-existingEncryptionKeySecret: "n8n-one-secret"
+existingEncryptionKeySecret: "n8n-secret"
 
 oneSecret:
   enabled: true
-  name: "n8n-one-secret"
+  name: "n8n-secret"
   encryptionKey: ""
   postgresPassword: ""
   redisUsername: "default"
   redisPassword: ""
 
 externalPostgresql:
-  existingSecret: "n8n-one-secret"
+  existingSecret: "n8n-secret"
 
 db:
   type: postgresdb
@@ -74,6 +86,27 @@ npmRegistry:
 main:
   count: 1
   editorBaseUrl: "http://n8n-it.saturn-res.ipa.zs"
+  resources:
+    requests:
+      cpu: "2000m"
+      memory: "4096Mi"
+    limits:
+      cpu: "4000m"
+      memory: "8192Mi"
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 300
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /healthz/readiness
+      port: http
+    initialDelaySeconds: 300
+    periodSeconds: 10
+    failureThreshold: 3
   extraEnvVars:
     TZ: "Asia/Shanghai"
     GENERIC_TIMEZONE: "Asia/Shanghai"
@@ -83,21 +116,22 @@ main:
     N8N_PUSH_BACKEND: "websocket"
     EXECUTIONS_MODE: "queue"
 
-  # 兼容保留：sharedPersistence.enabled=true 时实际以 shared PVC 为准
+  # 不再把 PVC 挂载到 /home/node/.n8n（会覆盖镜像内预装的社区节点，导致 worker/webhook ENOENT）
   persistence:
-    enabled: true
+    enabled: false
     mountPath: "/home/node/.n8n"
     storageClass: "it"
     size: 10Gi
     accessMode: ReadWriteOnce
 
 sharedPersistence:
+  # 只用于 Python venv 缓存（pyenvs），实现“下载一次、多副本复用”，避免覆盖 /home/node/.n8n
   enabled: true
   existingClaim: ""
-  mountPath: "/home/node/.n8n"
+  mountPath: "/home/node/.n8n/pyenvs"
   subPath: ""
   # 该 volumeName 会作为各 Deployment/StatefulSet 中的 volume 名称
-  volumeName: "node-modules"
+  volumeName: "pyenvs-cache"
   storageClass: "it"
   accessMode: ReadWriteMany
   size: 10Gi
@@ -112,7 +146,7 @@ n8nSuper:
     N8N_PIP_EXTRA_INDEX_URL: ""
     N8N_PIP_DEFAULT_TIMEOUT: "60"
     N8N_PYTHON_AUTO_INSTALL: "true"
-    N8N_PYTHON_REQUIREMENTS_FILE: "/home/node/.n8n/requirements.txt"
+    N8N_PYTHON_REQUIREMENTS_FILE: "/home/node/.n8n/pyenvs/requirements.txt"
     N8N_PYTHON_VENV_CACHE_DIR: "/home/node/.n8n/pyenvs"
   # 若你启用了 taskRunners.mode=external，且希望 runner sidecar 也 source 同一份配置文件，开启该开关
   sourceConfigFileInTaskRunner: true
@@ -156,6 +190,27 @@ worker:
   mode: queue
   count: 2
   concurrency: 10
+  resources:
+    requests:
+      cpu: "2000m"
+      memory: "4096Mi"
+    limits:
+      cpu: "4000m"
+      memory: "8192Mi"
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 300
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /healthz/readiness
+      port: http
+    initialDelaySeconds: 300
+    periodSeconds: 10
+    failureThreshold: 3
   extraEnvVars:
     TZ: "Asia/Shanghai"
     GENERIC_TIMEZONE: "Asia/Shanghai"
@@ -164,6 +219,13 @@ webhook:
   mode: queue
   count: 1
   url: "http://n8n-it.saturn-res.ipa.zs/"
+  resources:
+    requests:
+      cpu: "1000m"
+      memory: "2048Mi"
+    limits:
+      cpu: "2000m"
+      memory: "4096Mi"
   extraEnvVars:
     TZ: "Asia/Shanghai"
     GENERIC_TIMEZONE: "Asia/Shanghai"
@@ -209,15 +271,22 @@ redis:
     tag: latest
   auth:
     enabled: true
-    existingSecret: "n8n-one-secret"
+    existingSecret: "n8n-secret"
   master:
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1024Mi"
+      limits:
+        cpu: "1000m"
+        memory: "2048Mi"
     persistence:
       enabled: true
       storageClass: "it"
       size: 4Gi
 
 externalRedis:
-  existingSecret: "n8n-one-secret"
+  existingSecret: "n8n-secret"
   database: 0
   host: ""
   port: 6379
@@ -237,4 +306,14 @@ postgresql:
   auth:
     username: ""
     database: "n8n"
-    existingSecret: "n8n-one-secret"
+    existingSecret: "n8n-secret"
+  primary:
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "2048Mi"
+      limits:
+        cpu: "2000m"
+        memory: "4096Mi"
+    persistence:
+      storageClass: "it"

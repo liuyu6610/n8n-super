@@ -198,10 +198,10 @@ metadata:
     meta.helm.sh/release-namespace: it
 type: Opaque
 data:
-  N8N_ENCRYPTION_KEY: "NDY5ZTJmMjUxNzY2MjIwMmI5YTUwODgzOWEwNjMwZmY="
-  postgres-password: "OGFjNmE5YTM4NmFmNTE4MWVmMmQ4NzBkMTQ5ZjNhZTU="
+  N8N_ENCRYPTION_KEY: "MDZiNTJlYjA2OTg4ZDFkODFjNGFjNWJmNDhmNjFjOWI="
+  postgres-password: "N2VjZGEwYWJkYjMyNTEyNjdiMDY0ZjYyZDcxYTNjNzI="
   redis-username: "ZGVmYXVsdA=="
-  redis-password: "Yjk4NGM0YmUwYmFjY2ExZmRiMzMzNDM5ZDliZjdhOWU="
+  redis-password: "ZDZmOGU2N2I3MzgyZjIxODMwNjlmMzBhMjhmNDgyM2I="
 ---
 # Source: n8n/charts/redis/templates/configmap.yaml
 apiVersion: v1
@@ -1208,13 +1208,19 @@ spec:
               containerPort: 5678
               protocol: TCP
           livenessProbe:
+            failureThreshold: 3
             httpGet:
               path: /healthz
               port: http
+            initialDelaySeconds: 300
+            periodSeconds: 10
           readinessProbe:
+            failureThreshold: 3
             httpGet:
               path: /healthz/readiness
               port: http
+            initialDelaySeconds: 300
+            periodSeconds: 10
           resources:
             {}
           env:
@@ -1525,6 +1531,7 @@ spec:
         resources:
           requests:
             storage: "8Gi"
+        storageClassName: it
 ---
 # Source: n8n/charts/redis/templates/master/application.yaml
 apiVersion: apps/v1

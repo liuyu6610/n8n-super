@@ -2,6 +2,11 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "properties": {
+    "namespaceOverride": {
+      "type": "string",
+      "description": "String to fully override release namespace (compatibility field for tools/charts that emit namespaceOverride at root)",
+      "default": ""
+    },
     "affinity": {
       "additionalProperties": true,
       "description": "DEPRECATED: Use main, worker, and webhook blocks affinity fields instead. This field will be removed in a future release.",
