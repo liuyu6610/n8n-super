@@ -228,6 +228,33 @@
           "title": "env",
           "type": "object"
         },
+        "sharedVenv": {
+          "additionalProperties": false,
+          "description": "Use a single shared Python venv directory (optionally persisted via sharedPersistence) for PythonFunction/Execute Command.",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "required": [],
+              "title": "enabled",
+              "type": "boolean"
+            },
+            "path": {
+              "default": "",
+              "required": [],
+              "title": "path",
+              "type": "string"
+            },
+            "bootstrap": {
+              "default": false,
+              "required": [],
+              "title": "bootstrap",
+              "type": "boolean"
+            }
+          },
+          "required": ["enabled", "path", "bootstrap"],
+          "title": "sharedVenv",
+          "type": "object"
+        },
         "files": {
           "additionalProperties": false,
           "properties": {
@@ -249,7 +276,7 @@
           "type": "object"
         }
       },
-      "required": ["enabled", "configFilePath", "sourceConfigFileInTaskRunner", "env", "files"],
+      "required": ["enabled", "configFilePath", "sourceConfigFileInTaskRunner", "env", "sharedVenv", "files"],
       "title": "n8nSuper",
       "type": "object"
     },

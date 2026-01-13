@@ -58,6 +58,7 @@ RUN set -eux; \
       curl \
       fonts-liberation \
       git \
+      iproute2 \
       jq \
       libasound2 \
       libatk-bridge2.0-0 \
@@ -65,6 +66,7 @@ RUN set -eux; \
       libdrm2 \
       libgbm1 \
       libgtk-3-0 \
+      netcat-openbsd \
       libnss3 \
       libx11-xcb1 \
       libxcomposite1 \
@@ -90,7 +92,9 @@ RUN set -eux; \
       freetype \
       git \
       harfbuzz \
+      iproute2 \
       jq \
+      netcat-openbsd \
       nss \
       openssh-client \
       python3 \
@@ -123,7 +127,7 @@ ARG PIP_INDEX_URL
 ARG PIP_EXTRA_INDEX_URL
 ARG PIP_TRUSTED_HOST
 ARG PIP_DEFAULT_TIMEOUT
- RUN set -eux; \
+RUN set -eux; \
   if command -v apk >/dev/null 2>&1; then \
     virtualenv -p python3 "${N8N_PYTHON_VENV}"; \
   else \
@@ -143,14 +147,8 @@ ARG PIP_DEFAULT_TIMEOUT
     PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-}" \
     "${N8N_PYTHON_VENV}/bin/pip" install --no-cache-dir -r /opt/n8n-super-requirements.txt; \
   fi; \
-  # 确保 wrapper 可执行
-  chmod +x /usr/local/bin/n8n-python3-wrapper.sh; \
-  # 将基础 venv 的 python3 重命名为 python3-real，并用 wrapper 替换 python3
-  # 这样 n8n-nodes-python 调用 python3 时会自动触发依赖安装逻辑
-  if [ -x "${N8N_PYTHON_VENV}/bin/python3" ] && [ ! -x "${N8N_PYTHON_VENV}/bin/python3-real" ]; then \
-    mv "${N8N_PYTHON_VENV}/bin/python3" "${N8N_PYTHON_VENV}/bin/python3-real"; \
-    cp /usr/local/bin/n8n-python3-wrapper.sh "${N8N_PYTHON_VENV}/bin/python3"; \
-    chmod +x "${N8N_PYTHON_VENV}/bin/python3"; \
+  if [ -x "${N8N_PYTHON_VENV}/bin/python3" ] && [ ! -e "${N8N_PYTHON_VENV}/bin/python3-real" ]; then \
+    ln -s "${N8N_PYTHON_VENV}/bin/python3" "${N8N_PYTHON_VENV}/bin/python3-real"; \
   fi; \
   # 运行时默认用户是 node，确保 node 用户可读写 venv
   chown -R node:node "${N8N_PYTHON_VENV}"
@@ -168,6 +166,8 @@ ARG KUBECTL_VERSION=v1.30.8
 ARG KUBECTL_SHA256=""
 ARG HELM_VERSION=v3.15.4
 ARG HELM_SHA256=""
+ARG YQ_VERSION=v4.45.1
+ARG YQ_SHA256=""
 RUN set -eux; \
   arch="amd64"; \
   curl -fsSL -o /usr/local/bin/argocd "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-${arch}"; \
@@ -186,7 +186,12 @@ RUN set -eux; \
   mv "/tmp/${os}-${arch}/helm" /usr/local/bin/helm; \
   chmod +x /usr/local/bin/helm; \
   rm -rf "/tmp/${helm_tgz}" "/tmp/${os}-${arch}"; \
-  /usr/local/bin/helm version || true
+  /usr/local/bin/helm version || true; \
+  yq_url="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_${os}_${arch}"; \
+  curl -fsSL -o /usr/local/bin/yq "${yq_url}"; \
+  chmod +x /usr/local/bin/yq; \
+  if [ -n "${YQ_SHA256}" ]; then echo "${YQ_SHA256}  /usr/local/bin/yq" | sha256sum -c -; fi; \
+  /usr/local/bin/yq --version || true
 
 # n8n community nodes
 #

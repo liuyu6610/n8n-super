@@ -8,3 +8,12 @@ openpyxl==3.1.5
 pytz==2025.1
 python-dateutil==2.9.0
 
+# 常用增强/运维自动化依赖（建议固定版本，减少线上漂移）
+rich==13.7.1
+tenacity==8.5.0
+
+# Kubernetes/JSON 查询常用
+kubernetes==31.0.0
+jmespath==1.0.1
+jsonpath-ng==1.6.1
+

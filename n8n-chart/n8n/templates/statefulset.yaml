@@ -317,8 +317,14 @@ spec:
           {{- if .Values.n8nSuper.enabled }}
             - name: N8N_SUPER_CONFIG_FILE
               value: {{ .Values.n8nSuper.configFilePath | quote }}
+            - name: N8N_PYTHON_VENV
+              value: {{ include "n8n.n8nSuper.pythonVenvPath" . | quote }}
+            {{- if .Values.n8nSuper.sharedVenv.bootstrap }}
+            - name: N8N_PYTHON_VENV_BOOTSTRAP
+              value: "true"
+            {{- end }}
             - name: PATH
-              value: "/opt/n8n-python-venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+              value: {{ printf "%s/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" (include "n8n.n8nSuper.pythonVenvPath" .) | quote }}
           {{- range $key, $value := .Values.n8nSuper.env }}
             - name: {{ upper $key }}
               value: {{ $value | quote }}

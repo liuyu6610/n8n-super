@@ -189,6 +189,10 @@ n8nSuper:
   configFilePath: "/etc/n8n-super.env"
   sourceConfigFileInTaskRunner: false
   env: {}
+  sharedVenv:
+    enabled: false
+    path: ""
+    bootstrap: false
   files:
     n8nSuperEnv: ""
     requirementsTxt: ""

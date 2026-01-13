@@ -139,6 +139,17 @@ sharedPersistence:
 n8nSuper:
   enabled: true
   configFilePath: "/etc/n8n-super.env"
+  # 单一共享 venv（可选）：
+  # - 开启后，PythonFunction / Execute Command 将始终使用同一个 venv 目录（N8N_PYTHON_VENV）
+  # - 建议配合 sharedPersistence.enabled=true 把该目录持久化到 PVC（可实现运行中 pip install 立即生效且持久化）
+  sharedVenv:
+    enabled: false
+    # 留空时默认使用 {{ sharedPersistence.mountPath }}/python-venv（要求 sharedPersistence.mountPath 非空）
+    # path: "/data/python-venv"
+    path: ""
+    # 若开启 sharedVenv 且 venv 目录来自 PVC：建议 bootstrap=true
+    # 启动时若目录为空，会自动从镜像内 /opt/n8n-python-venv 初始化一次
+    bootstrap: false
   # 额外 env（会注入到 main/worker/webhook 以及 external task runner sidecar）
   env:
     N8N_PIP_INDEX_URL: "https://pypi.tuna.tsinghua.edu.cn/simple"

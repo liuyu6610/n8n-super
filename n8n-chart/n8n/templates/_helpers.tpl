@@ -490,6 +490,23 @@ Check postgres ssl certificate file content exist or not
  {{- printf "%s-n8n-super-files" (include "n8n.fullname" .) | trunc 63 | trimSuffix "-" -}}
  {{- end -}}
 
+ {{- define "n8n.n8nSuper.pythonVenvPath" -}}
+ {{- if and .Values.n8nSuper.enabled .Values.n8nSuper.sharedVenv.enabled -}}
+ {{- if .Values.n8nSuper.sharedVenv.path -}}
+ {{- .Values.n8nSuper.sharedVenv.path -}}
+ {{- else -}}
+ {{- $mp := (include "n8n.sharedPersistence.mountPath" .) -}}
+ {{- if $mp -}}
+ {{- printf "%s/python-venv" $mp -}}
+ {{- else -}}
+ {{- "/opt/n8n-python-venv" -}}
+ {{- end -}}
+ {{- end -}}
+ {{- else -}}
+ {{- "/opt/n8n-python-venv" -}}
+ {{- end -}}
+ {{- end -}}
+
 {{/*
 Check if volumes should be included to main. If the context is not provided, result must be false
 */}}

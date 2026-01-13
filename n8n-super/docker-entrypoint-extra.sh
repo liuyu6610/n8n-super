@@ -63,16 +63,31 @@ EXTRA_PACKAGES="${N8N_PYTHON_PACKAGES:-}"
 REQUIREMENTS_FILE="${N8N_PYTHON_REQUIREMENTS_FILE:-}"
 AUTO_INSTALL="${N8N_PYTHON_AUTO_INSTALL:-}"
 
+ VENV_BOOTSTRAP="${N8N_PYTHON_VENV_BOOTSTRAP:-}"
+
+ if [ "${VENV_BOOTSTRAP}" = "true" ] || [ "${VENV_BOOTSTRAP}" = "1" ] || [ "${VENV_BOOTSTRAP}" = "yes" ]; then
+	if [ -n "${VENV}" ] && [ "${VENV}" != "/opt/n8n-python-venv" ]; then
+		if [ ! -x "${VENV}/bin/python" ] && [ ! -x "${VENV}/bin/python3" ]; then
+			echo "[n8n-super] Bootstrapping shared python venv into: ${VENV}"
+			mkdir -p "${VENV}" || true
+			if command -v rsync >/dev/null 2>&1; then
+				rsync -a "/opt/n8n-python-venv/" "${VENV}/"
+			else
+				cp -a "/opt/n8n-python-venv/." "${VENV}/"
+			fi
+		fi
+	fi
+ fi
+
  # 如果你配置了 requirements/packages，提示用户当前策略。
  # 注意：真正的安装动作在 python3 wrapper 中执行（按依赖 hash 创建独立 venv）。
  if [ -n "${REQUIREMENTS_FILE}" ] || [ -n "${EXTRA_PACKAGES}" ]; then
 	echo "[n8n-super] Extra Python packages requested"
-	echo "[n8n-super] NOTE: runtime isolated venv mode enabled; python3 wrapper will install per-requirements hash"
-	echo "[n8n-super] NOTE: base venv will NOT be modified at container startup"
+	echo "[n8n-super] NOTE: single shared venv mode: runtime installs (if enabled) will target N8N_PYTHON_VENV"
  fi
 
 if [ -n "${AUTO_INSTALL}" ]; then
-	echo "[n8n-super] N8N_PYTHON_AUTO_INSTALL=${AUTO_INSTALL} (python3 wrapper will handle runtime installs)"
+	echo "[n8n-super] N8N_PYTHON_AUTO_INSTALL=${AUTO_INSTALL}"
 fi
 
  # 可选：缓存清理
