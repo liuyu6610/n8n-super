@@ -111,10 +111,12 @@ main:
     TZ: "Asia/Shanghai"
     GENERIC_TIMEZONE: "Asia/Shanghai"
     N8N_TRUST_PROXY: "true"
+    N8N_PROXY_HOPS: "1"
     N8N_PROTOCOL: "http"
     N8N_HOST: "n8n-it.saturn-res.ipa.zs"
     N8N_PUSH_BACKEND: "websocket"
     EXECUTIONS_MODE: "queue"
+    NODE_OPTIONS: "--openssl-legacy-provider"
 
   # 不再把 PVC 挂载到 /home/node/.n8n（会覆盖镜像内预装的社区节点，导致 worker/webhook ENOENT）
   persistence:
@@ -228,6 +230,8 @@ worker:
   extraEnvVars:
     TZ: "Asia/Shanghai"
     GENERIC_TIMEZONE: "Asia/Shanghai"
+    N8N_PROXY_HOPS: "1"
+    NODE_OPTIONS: "--openssl-legacy-provider"
 
 webhook:
   mode: queue
@@ -243,6 +247,8 @@ webhook:
   extraEnvVars:
     TZ: "Asia/Shanghai"
     GENERIC_TIMEZONE: "Asia/Shanghai"
+    N8N_PROXY_HOPS: "1"
+    NODE_OPTIONS: "--openssl-legacy-provider"
 
 taskRunners:
   enabled: false
